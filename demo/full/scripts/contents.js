@@ -1,5 +1,11 @@
 export default [
   {
+    "name": "test xlinks",
+    "url": "http://vm2.dashif.org/livesim-dev/periods_60/xlink_30/insertad_2/testpic_2s/Manifest.mpd",
+    "transport": "dash",
+    "live": "true",
+  },
+  {
     "name": "DASH-IF - SegmentTimeline live stream",
     "url": "https://vm2.dashif.org/livesim-dev/segtimeline_1/testpic_6s/Manifest.mpd",
     "transport": "dash",

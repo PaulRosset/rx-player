@@ -88,6 +88,8 @@ export interface IParsedPeriod {
   // optional
   duration? : number;
   bitstreamSwitching? : boolean;
+  linkRef? : string;
+  linkActuateMode? : "onLoad"|"onRequest";
 }
 
 export interface IParsedManifest {

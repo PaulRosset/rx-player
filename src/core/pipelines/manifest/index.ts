@@ -15,12 +15,15 @@
  */
 
 import {
+  combineLatest as observableCombineLatest,
   Observable,
+  of as observableOf,
   Subject,
 } from "rxjs";
 import {
   filter,
   map,
+  mergeMap,
   share,
   tap,
 } from "rxjs/operators";
@@ -34,7 +37,11 @@ import { ITransportPipelines } from "../../../net";
 import {
   IManifestLoaderArguments,
   IManifestResult,
+  IPeriodLoaderArguments,
+  IPeriodResult,
 } from "../../../net/types";
+import { IParsedPeriod } from "../../../parsers/manifest/types";
+
 import Pipeline, {
   IPipelineCache,
   IPipelineData,
@@ -45,8 +52,81 @@ type IPipelineManifestResult =
   IPipelineData<IManifestResult> |
   IPipelineCache<IManifestResult>;
 
+type IPipelinePeriodResult =
+  IPipelineData<IPeriodResult> |
+  IPipelineCache<IPeriodResult>;
+
 type IPipelineManifestOptions =
   IPipelineOptions<IManifestLoaderArguments, Document|string>;
+
+type IPipelinePeriodOptions =
+  IPipelineOptions<IPeriodLoaderArguments, string>;
+
+/**
+ * Load periods from links in manifest.
+ * @param {String} transport
+ * @param {Object} pipelineOptions
+ * @param {Object} periods
+ * @returns {Observable}
+ */
+function loadLinkedPeriods(
+  transport : ITransportPipelines,
+  pipelineOptions : IPipelinePeriodOptions,
+  periods : IParsedPeriod[]
+): Observable<IParsedPeriod[]> {
+  const { period: periodPipeline } = transport;
+  if (periodPipeline) {
+    const periods$ =
+      periods.reduce((
+        acc: Array<Observable<IParsedPeriod|IParsedPeriod[]>>, period, i
+      ) => {
+        const prevPeriod = periods[i - 1];
+        const nextPeriod = periods[i + 1];
+        if (period.linkRef) {
+          if (period.linkActuateMode === "onLoad") {
+            const period$ = Pipeline<
+              IPeriodLoaderArguments, string, IPeriodResult
+            >(
+              periodPipeline(prevPeriod, nextPeriod), pipelineOptions
+            )({ url: period.linkRef });
+            acc.push(
+              period$.pipe(
+                filter((arg): arg is IPipelinePeriodResult =>
+                  arg.type === "data" || arg.type === "cache"
+                ),
+                map((data) => data.value.parsed.periods)
+              )
+            );
+          } else {
+            throw new Error(
+              "Unsupported actuate mode for xLink: " + period.linkActuateMode);
+          }
+        } else {
+          acc.push(observableOf(period));
+        }
+        return acc;
+      }, []);
+
+    return observableCombineLatest(
+      ... periods$
+    ).pipe(
+      map((elements) => {
+        return elements.reduce((acc: IParsedPeriod[], value) => {
+          if ((value as IParsedPeriod[]).length != null) {
+            (value as IParsedPeriod[]).forEach((element) => {
+              acc.push(element);
+            });
+          } else {
+            acc.push(value as IParsedPeriod);
+          }
+          return acc;
+        }, []);
+      })
+    );
+  } else {
+    return observableOf([]);
+  }
+}
 
 /**
  * Create function allowing to easily fetch and parse the manifest from its URL.
@@ -88,12 +168,23 @@ export default function createManifestPipeline(
         arg.type === "data" || arg.type === "cache"
       ),
 
-      map(({ value }) : Manifest => {
-        return createManifest(
-          value.parsed.manifest,
-          supplementaryTextTracks,
-          supplementaryImageTracks,
-          warning$
+      mergeMap(({ value }) : Observable<Manifest> => {
+        const periods = value.parsed.manifest.periods;
+
+        const periodPipelineOptions = {
+          maxRetry: pipelineOptions.maxRetry,
+          maxRetryOffline: pipelineOptions.maxRetryOffline,
+        };
+        return loadLinkedPeriods(transport, periodPipelineOptions, periods).pipe(
+          map((loadedPeriods) => {
+            value.parsed.manifest.periods = loadedPeriods;
+            return createManifest(
+              value.parsed.manifest,
+              supplementaryTextTracks,
+              supplementaryImageTracks,
+              warning$
+            );
+          })
         );
       }),
       share()

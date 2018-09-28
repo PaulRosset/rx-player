@@ -47,6 +47,8 @@ export interface IPeriodArguments {
   adaptations: IAdaptationsArguments;
   start: number;
   duration?: number;
+  linkRef? : string;
+  linkActuateMode? : "onLoad"|"onRequest";
 }
 
 export default class Period {
@@ -55,6 +57,7 @@ export default class Period {
   public duration? : number;
   public start : number;
   public end? : number;
+  public linkURL : string|null;
 
   /**
    * @constructor
@@ -77,6 +80,11 @@ export default class Period {
         }, {});
     this.duration = args.duration;
     this.start = args.start;
+    this.linkURL =
+      (
+        args.linkActuateMode === "onRequest" &&
+        args.linkRef
+      ) ? args.linkRef : null;
 
     if (this.duration != null && this.start != null) {
       this.end = this.start + this.duration;
