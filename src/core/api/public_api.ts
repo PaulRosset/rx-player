@@ -1116,9 +1116,7 @@ class Player extends EventEmitter<IPublicAPIEvent> {
       return this.videoElement.currentTime;
     }
     if (manifest != null) {
-      const currentTime = this.videoElement.currentTime;
-      return this.isLive() ? (currentTime + (manifest.availabilityStartTime || 0)) :
-                             currentTime;
+      return this.videoElement.currentTime + (manifest.availabilityStartTime || 0);
     }
     return 0;
   }

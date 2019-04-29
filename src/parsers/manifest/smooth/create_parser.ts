@@ -580,6 +580,7 @@ function createSmoothStreamingParser(
       duration,
       id: "gen-smooth-manifest-" + generateManifestID(),
       isLive,
+      isDynamic: isLive,
       maximumTime,
       minimumTime,
       periods: [{ adaptations,
