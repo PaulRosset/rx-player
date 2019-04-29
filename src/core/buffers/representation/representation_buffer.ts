@@ -81,8 +81,8 @@ import pushDataToSourceBufferWithRetries from "./push_data";
 // Item emitted by the Buffer's clock$
 export interface IRepresentationBufferClockTick {
   currentTime : number; // the current position we are in the video in s
-  liveGap? : number; // gap between the current position and the live edge of
-                     // the content. Not set for non-live contents
+  liveGap? : number; // gap between the current position and the edge of a
+                     // dynamic content. Not set for static contents
   stalled : object|null; // if set, the player is currently stalled
   wantedTimeOffset : number; // offset in s to add to currentTime to obtain the
                              // position we actually want to download from
