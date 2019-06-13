@@ -15,7 +15,6 @@
  */
 
 import mediaCapabilitiesProber from "./mediaCapabilitiesProber";
+import download2Go from "./download2go";
 
-export {
-  mediaCapabilitiesProber
-};
+export { download2Go, mediaCapabilitiesProber };
