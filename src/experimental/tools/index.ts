@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import mediaCapabilitiesProber from "./mediaCapabilitiesProber";
 import download2Go from "./download2go";
+import mediaCapabilitiesProber from "./mediaCapabilitiesProber";
 
 export { download2Go, mediaCapabilitiesProber };
