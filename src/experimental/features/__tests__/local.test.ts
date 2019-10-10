@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+/* tslint:disable no-unsafe-any */
 describe("Features list - LOCAL_MANIFEST", () => {
   beforeEach(() => {
     jest.resetModules();
@@ -22,7 +23,7 @@ describe("Features list - LOCAL_MANIFEST", () => {
   it("should add LOCAL_MANIFEST in the current features", () => {
     const feat = {};
     jest.mock("../../../transports/local", () => ({ __esModule: true,
-                                                           default: feat }));
+                                                    default: feat }));
     const addDASHFeature = require("../local").default;
 
     const featureObject : {
@@ -33,3 +34,4 @@ describe("Features list - LOCAL_MANIFEST", () => {
     expect(featureObject.transports.local).toBe(feat);
   });
 });
+/* tslint:enable no-unsafe-any */
