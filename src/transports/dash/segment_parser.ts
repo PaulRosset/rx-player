@@ -29,14 +29,15 @@ import {
   ISegmentParserArguments,
   ISegmentParserObservable,
 } from "../types";
-import isWEBMEmbeddedTrack from "./is_webm_embedded_track";
-import getISOBMFFTimingInfos from "./isobmff_timing_infos";
+import getISOBMFFTimingInfos from "../utils/get_isobmff_timing_infos";
+import isWEBMEmbeddedTrack from "../utils/is_webm_embedded_track";
 
-export default function parser({ content,
-                                 response,
-                                 init } : ISegmentParserArguments< Uint8Array |
-                                                                   ArrayBuffer |
-                                                                   null >
+export default function parser(
+  { content,
+    response,
+    init } : ISegmentParserArguments< Uint8Array |
+                                      ArrayBuffer |
+                                      null >
 ) : ISegmentParserObservable< Uint8Array | ArrayBuffer > {
   const { period, representation, segment } = content;
   const { data, isChunked } = response;
@@ -49,13 +50,7 @@ export default function parser({ content,
 
   const chunkData = data instanceof Uint8Array ? data :
                                                  new Uint8Array(data);
-
-  const indexRange = segment.indexRange;
   const isWEBM = isWEBMEmbeddedTrack(representation);
-
-  const nextSegments = isWEBM ?
-    getSegmentsFromCues(chunkData, 0) :
-    getSegmentsFromSidx(chunkData, indexRange ? indexRange[0] : 0);
 
   if (!segment.isInit) {
     const chunkInfos = isWEBM ? null : // TODO extract from webm
@@ -68,21 +63,26 @@ export default function parser({ content,
                           chunkInfos,
                           chunkOffset,
                           appendWindow: [period.start, period.end] });
-  } else { // it is an initialization segment
-    if (nextSegments) {
-      representation.index._addSegments(nextSegments);
-    }
-
-    const timescale = isWEBM ? getTimeCodeScale(chunkData, 0) :
-                               getMDHDTimescale(chunkData);
-
-    const chunkInfos = timescale != null && timescale > 0 ? { time: 0,
-                                                              duration: 0,
-                                                              timescale } :
-                                                            null;
-    return observableOf({ chunkData,
-                          chunkInfos,
-                          chunkOffset: segment.timestampOffset || 0,
-                          appendWindow: [period.start, period.end] });
   }
+
+  // it is an initialization segment
+
+  const { indexRange } = segment;
+  const nextSegments = isWEBM ?
+    getSegmentsFromCues(chunkData, 0) :
+    getSegmentsFromSidx(chunkData, indexRange ? indexRange[0] : 0);
+  if (nextSegments) {
+    representation.index._addSegments(nextSegments);
+  }
+
+  const timescale = isWEBM ? getTimeCodeScale(chunkData, 0) :
+                             getMDHDTimescale(chunkData);
+  const initChunkInfos = timescale != null && timescale > 0 ? { time: 0,
+                                                                duration: 0,
+                                                                timescale } :
+                                                              null;
+  return observableOf({ chunkData,
+                        chunkInfos: initChunkInfos,
+                        chunkOffset: segment.timestampOffset || 0,
+                        appendWindow: [period.start, period.end] });
 }

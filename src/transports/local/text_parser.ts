@@ -15,10 +15,7 @@
  */
 
 import { of as observableOf } from "rxjs";
-import {
-  getMDHDTimescale,
-  getSegmentsFromSidx,
-} from "../../parsers/containers/isobmff";
+import { getMDHDTimescale } from "../../parsers/containers/isobmff";
 import {
   bytesToStr,
   strToBytes,
@@ -46,24 +43,18 @@ function parseISOBMFFEmbeddedTextTrack(
                                       ArrayBuffer |
                                       string >
 ) : ITextParserObservable {
-  const { period, representation, segment } = content;
-  const { isInit, indexRange } = segment;
+  const { period, segment } = content;
   const { data, isChunked } = response;
 
   const chunkBytes = typeof data === "string" ? strToBytes(data) :
                      data instanceof Uint8Array ? data :
                                                   new Uint8Array(data);
-  if (isInit) {
-    const sidxSegments = getSegmentsFromSidx(chunkBytes,
-                                             indexRange ? indexRange[0] : 0);
+  if (segment.isInit) {
     const mdhdTimescale = getMDHDTimescale(chunkBytes);
     const initChunkInfos = mdhdTimescale > 0 ? { time: 0,
                                                  duration: 0,
                                                  timescale: mdhdTimescale } :
                                                null;
-    if (sidxSegments) {
-      representation.index._addSegments(sidxSegments);
-    }
     return observableOf({ chunkData: null,
                           chunkInfos: initChunkInfos,
                           chunkOffset: segment.timestampOffset || 0,
