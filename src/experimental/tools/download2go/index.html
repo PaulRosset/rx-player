@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Document</title>
+  </head>
+  <body>
+    <div class="w3-border">
+      <div class="w3-grey" style="height:24px;width:0%"></div>
+    </div>
+    <script src="./index.ts"></script>
+    <script>
+      (async function() {
+        const polo = new window.d2g();
+        await polo.initDB();
+        console.warn(polo.db);
+      })();
+      // window.d2g.init().then(function(D2G) {
+      // console.warn(D2G);
+      // const progressBar = document.querySelector(".w3-grey");
+      // D2G.addEventListener("progress", evt => {
+      //   progressBar.style.width = `${evt.progress}%`;
+      // });
+      // D2G.download({
+      //   url: "https://vm2.dashif.org/dash/vod/testpic_2s/multi_subs.mpd",
+      //   dbSettings: {
+      //     contentID: "123",
+      //     metaData: {
+      //       name: "POLO",
+      //     },
+      //   },
+      //   videoSettings: {
+      //     quality: "LOW",
+      //   },
+      // });
+      // });
+    </script>
+  </body>
+</html>

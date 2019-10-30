@@ -14,77 +14,75 @@
  * limitations under the License.
  */
 
-import { IDBPDatabase } from "idb";
-import { Subject } from "rxjs";
-
-import {
-  IEmitterLoaderBuilder,
-  ILocalManifestOnline,
-  IProgressBarBuilder,
-  IVideoSettings,
-} from "./apis/dash/types";
+import { IKeySystemOption } from "../../../core/eme";
+import Manifest from "../../../manifest";
+import { IContextRicher } from "./apis/downloader/types";
 
 export type IVideoSettingsQualityInputType = "HIGH" | "MEDIUM" | "LOW";
-export interface ISettingsDownloader {
+
+export interface IGlobalSettings {
+  nameDB?: string;
+}
+
+export interface IInitSettings {
   url: string;
-  type: "start";
-  dbSettings: {
-    contentID: string;
-    metaData?: {
-      [prop: string]: any;
-    };
-  };
-  videoSettings: IVideoSettings;
-}
-
-export interface IProgressBarBuilderAbstract {
-  progress: number;
-  size: number;
-  progressBarBuilder: IProgressBarBuilder;
-  status: "counting" | "processing";
-}
-
-export interface IStoredManifest {
+  transport: "smooth" | "dash";
+  // type: "start";
   contentID: string;
   metaData?: {
     [prop: string]: any;
   };
-  progress: number;
-  progressBarBuilder: IProgressBarBuilder;
-  rxpManifest: ILocalManifestOnline;
+  adv?: IAdvancedSettings;
+  keySystems?: IKeySystemOption;
+}
+
+export interface IResumeSettings extends IStoredManifest {
+  type: "resume";
+}
+
+export interface IStoredManifest {
+  contentID: string;
+  manifest: Manifest | null;
+  builder: {
+    video: IContextRicher[];
+    audio: IContextRicher[];
+    text: IContextRicher[];
+  };
+  progress: IProgressBuilder;
   size: number;
+  metaData?: {
+    [prop: string]: any;
+  };
+}
+
+export interface IProgressBuilder {
+  percentage: number;
+  current: number;
+  overall: number;
 }
 
 export type IStoreManifestEveryFn = (progress: number) => boolean;
+export interface IAdvancedSettings {
+  storeManifestEvery?: IStoreManifestEveryFn;
+  quality?: IVideoSettingsQualityInputType;
+}
+
+/***
+ *
+ * Event Emitter type:
+ *
+ */
 
 type IArgs<
-TEventRecord,
-TEventName extends keyof TEventRecord
+  TEventRecord,
+  TEventName extends keyof TEventRecord
 > = TEventRecord[TEventName];
 
 export interface IEmitterTrigger<T> {
   trigger<TEventName extends keyof T>(
     evt: TEventName,
-    arg: IArgs<T, TEventName>
+    arg: IArgs<T, TEventName>,
   ): void;
-}
-
-export interface IUtils {
-  emitter: IEmitterTrigger<IDownload2GoEvents>;
-  db: IDBPDatabase;
-  storeManifestEvery?: IStoreManifestEveryFn;
-  progressBarBuilder$?: Subject<IEmitterLoaderBuilder>;
-}
-
-export interface IOptionsStarter {
-  nameDB?: string;
-  storeManifestEvery?: IStoreManifestEveryFn;
-}
-
-export interface IRequestArgs {
-  method: "POST" | "GET";
-  headers?: { [prop: string]: string };
-  responseType?: XMLHttpRequestResponseType;
 }
 
 export interface IDownload2GoEvents {
