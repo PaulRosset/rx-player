@@ -14,6 +14,7 @@ import XHRMock from "../../utils/request_mock";
  * url {string}
  * transport {string}
  * duration {number}
+ * isDynamic {boolean}
  * isLive {boolean}
  * maximumPosition? {number}
  * minimumPosition? {number}
@@ -37,29 +38,25 @@ import XHRMock from "../../utils/request_mock";
  *                               .width? {number}
  *                               .index
  *                                     .init
- *                                          .mediaURL {string}
+ *                                          .mediaURLs {string}
  *                                     .segments[]
  *                                                .time {number}
  *                                                .timescale {number}
  *                                                .duration {number}
- *                                                .mediaURL {string}
+ *                                                .mediaURLs {string}
  * ```
  */
-export default function launchTestsForContent(
-  manifestInfos
-) {
+export default function launchTestsForContent(manifestInfos) {
   let player;
   let xhrMock;
 
-  const {
-    availabilityStartTime,
-    duration,
-    isLive,
-    maximumPosition,
-    minimumPosition,
-    periods: periodsInfos,
-    transport,
-  } = manifestInfos;
+  const { availabilityStartTime,
+          isDynamic,
+          isLive,
+          maximumPosition,
+          minimumPosition,
+          periods: periodsInfos,
+          transport } = manifestInfos;
 
   const firstPeriodIndex = isLive ? periodsInfos.length - 1 : 0;
   const videoRepresentationsForFirstPeriod =
@@ -98,10 +95,10 @@ export default function launchTestsForContent(
         player.loadVideo({ url: manifestInfos.url, transport });
 
         // should only have the manifest for now
+        await sleep(1);
         expect(xhrMock.getLockedXHR().length).to.equal(1);
         expect(xhrMock.getLockedXHR()[0].url).to.equal(manifestInfos.url);
 
-        await sleep(1);
         await xhrMock.flush(); // only wait for the manifest request
         await sleep(1);
 
@@ -132,19 +129,19 @@ export default function launchTestsForContent(
               xhrMock.getLockedXHR()[1].url,
             ];
             expect(requestsDone)
-              .to.include(videoRepresentationInfos.index.init.mediaURL);
+              .to.include(videoRepresentationInfos.index.init.mediaURLs[0]);
             expect(requestsDone)
-              .to.include(audioRepresentationInfos.index.init.mediaURL);
+              .to.include(audioRepresentationInfos.index.init.mediaURLs[0]);
           } else if (!(
             audioRepresentationInfos && audioRepresentationInfos.index.init)
           ) {
             expect(xhrMock.getLockedXHR().length).to.equal(1);
             expect(xhrMock.getLockedXHR()[0].url).to
-              .equal(videoRepresentationInfos.index.init.mediaURL);
+              .equal(videoRepresentationInfos.index.init.mediaURLs[0]);
           } else {
             expect(xhrMock.getLockedXHR().length).to.equal(1);
             expect(xhrMock.getLockedXHR()[0].url).to
-              .equal(audioRepresentationInfos.index.init.mediaURL);
+              .equal(audioRepresentationInfos.index.init.mediaURLs[0]);
           }
         }
       });
@@ -163,21 +160,20 @@ export default function launchTestsForContent(
     });
 
     describe("getManifest", () => {
-      it("should returns the manifest correctly parsed", async function () {
+      it("should return the manifest correctly parsed", async function () {
         xhrMock.lock();
         player.loadVideo({ url: manifestInfos.url, transport });
 
-        await sleep(1);
+        await sleep(10);
         await xhrMock.flush(); // only wait for the manifest request
-        await sleep(1);
+        await sleep(10);
 
         const manifest = player.getManifest();
         expect(manifest).not.to.equal(null);
         expect(typeof manifest).to.equal("object");
-        expect(manifest.getDuration()).to
-          .equal(isLive ? Math.MAX_NUMBER : duration);
         expect(manifest.transport).to.equal(transport);
         expect(typeof manifest.id).to.equal("string");
+        expect(manifest.isDynamic).to.equal(isDynamic);
         expect(manifest.isLive).to.equal(isLive);
         expect(manifest.getUrl()).to.equal(manifestInfos.url);
 
@@ -266,8 +262,8 @@ export default function launchTestsForContent(
                 const initSegment = reprIndex.getInitSegment();
                 const initSegmentInfos = reprIndexInfos.init;
                 if (initSegmentInfos) {
-                  expect(initSegment.mediaURL)
-                    .to.equal(initSegmentInfos.mediaURL);
+                  expect(initSegment.mediaURLs)
+                    .to.deep.equal(initSegmentInfos.mediaURLs);
                   expect(typeof initSegment.id).to.equal("string");
                 }
 
@@ -294,8 +290,8 @@ export default function launchTestsForContent(
                   expect(firstSegment.timescale)
                     .to.equal(reprIndexInfos.segments[0].timescale);
 
-                  expect(firstSegment.mediaURL)
-                    .to.equal(reprIndexInfos.segments[0].mediaURL);
+                  expect(firstSegment.mediaURLs)
+                    .to.deep.equal(reprIndexInfos.segments[0].mediaURLs);
                 }
               }
             }
@@ -505,7 +501,7 @@ export default function launchTestsForContent(
             autoPlay: false,
           });
           await waitForLoadedStateAfterLoadVideo(player);
-          expect(player.getVideoDuration()).to.be.closeTo(duration, 0.1);
+          expect(player.getVideoDuration()).to.be.closeTo(maximumPosition, 0.1);
         });
       }
     });
@@ -513,7 +509,7 @@ export default function launchTestsForContent(
     describe("getVideoBufferGap", () => {
       // TODO handle live contents
       it("should return the buffer gap of the current range", async function() {
-        this.timeout(10000);
+        this.timeout(15000);
 
         player.setVideoBitrate(Infinity);
         player.setWantedBufferAhead(10);
@@ -524,7 +520,7 @@ export default function launchTestsForContent(
           autoPlay: false,
         });
         await waitForLoadedStateAfterLoadVideo(player);
-        await sleep(900);
+        await sleep(1500);
 
         let bufferGap = player.getVideoBufferGap();
         expect(bufferGap).to.be.at.least(9.5);
@@ -532,20 +528,20 @@ export default function launchTestsForContent(
 
         player.setWantedBufferAhead(20);
         expect(player.getWantedBufferAhead()).to.equal(20);
-        await sleep(900);
+        await sleep(1500);
         bufferGap = player.getVideoBufferGap();
         expect(bufferGap).to.be.at.least(19.5);
         expect(bufferGap).to.be.at.most(20 + 10);
 
         player.seekTo(minimumPosition + 10);
-        await sleep(900);
+        await sleep(1500);
         expect(player.getWantedBufferAhead()).to.equal(20);
         bufferGap = player.getVideoBufferGap();
         expect(bufferGap).to.be.at.least(19.5);
         expect(bufferGap).to.be.at.most(20 + 10);
 
         player.seekTo(minimumPosition + 10 + 30);
-        await sleep(900);
+        await sleep(1500);
         expect(player.getWantedBufferAhead()).to.equal(20);
         bufferGap = player.getVideoBufferGap();
         expect(bufferGap).to.be.at.least(19.5);
@@ -567,6 +563,7 @@ export default function launchTestsForContent(
     describe("getVideoLoadedTime", () => {
       // TODO handle live contents
       it("should return the time of the current loaded time", async function() {
+        this.timeout(4000);
         player.setWantedBufferAhead(10);
         expect(player.getWantedBufferAhead()).to.equal(10);
 
@@ -576,7 +573,7 @@ export default function launchTestsForContent(
           autoPlay: false,
         });
         await waitForLoadedStateAfterLoadVideo(player);
-        await sleep(200);
+        await sleep(500);
 
         const initialBufferGap = player.getVideoBufferGap();
         expect(player.getPosition()).to.be.closeTo(minimumPosition, 0.1);
@@ -585,7 +582,7 @@ export default function launchTestsForContent(
 
         xhrMock.lock();
         player.seekTo(minimumPosition + 5);
-        await sleep(200);
+        await sleep(300);
         expect(player.getVideoLoadedTime()).to.be
           .closeTo(initialBufferGap, 0.1);
 
@@ -604,6 +601,7 @@ export default function launchTestsForContent(
     describe("getVideoPlayedTime", () => {
       // TODO handle live contents
       it("should return the difference between the start of the current range and the current time", async function() {
+        this.timeout(3000);
         player.setWantedBufferAhead(10);
         expect(player.getWantedBufferAhead()).to.equal(10);
 
@@ -776,10 +774,10 @@ export default function launchTestsForContent(
 
         expect(player.getAvailableVideoBitrates()).to.eql([]);
 
-        await sleep(1);
+        await sleep(5);
         expect(player.getAvailableVideoBitrates()).to.eql([]);
         await xhrMock.flush();
-        await sleep(1);
+        await sleep(10);
 
         expect(player.getAvailableVideoBitrates()).to.eql(videoBitrates);
       });
@@ -796,10 +794,10 @@ export default function launchTestsForContent(
 
         expect(player.getAvailableAudioBitrates()).to.eql([]);
 
-        await sleep(1);
+        await sleep(5);
         expect(player.getAvailableAudioBitrates()).to.eql([]);
         await xhrMock.flush();
-        await sleep(1);
+        await sleep(10);
 
         expect(player.getAvailableAudioBitrates()).to.eql(audioBitrates);
       });
@@ -1456,7 +1454,7 @@ export default function launchTestsForContent(
         await sleep(1);
         expect(player.getAvailableAudioTracks()).to.eql([]);
         await xhrMock.flush();
-        await sleep(1);
+        await sleep(50);
 
         const audioTracks = player.getAvailableAudioTracks();
 
@@ -1504,7 +1502,7 @@ export default function launchTestsForContent(
         await sleep(1);
         expect(player.getAvailableTextTracks()).to.eql([]);
         await xhrMock.flush();
-        await sleep(1);
+        await sleep(50);
 
         const textTracks = player.getAvailableTextTracks();
 
@@ -1552,7 +1550,7 @@ export default function launchTestsForContent(
         await sleep(1);
         expect(player.getAvailableVideoTracks()).to.eql([]);
         await xhrMock.flush();
-        await sleep(1);
+        await sleep(50);
 
         const videoTracks = player.getAvailableVideoTracks();
 

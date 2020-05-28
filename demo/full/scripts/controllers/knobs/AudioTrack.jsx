@@ -43,6 +43,7 @@ const AudioTrackKnobBase = ({
   return (
     <Knob
       name="Audio Language"
+      ariaLabel="Update the audio track"
       className={className}
       disabled={availableLanguages.length < 2}
       onChange={onLanguageChange}
@@ -52,9 +53,9 @@ const AudioTrackKnobBase = ({
   );
 };
 
-export default withModulesState({
+export default React.memo(withModulesState({
   player: {
     language: "currentLanguage",
     availableLanguages: "availableLanguages",
   },
-})(AudioTrackKnobBase);
+})(AudioTrackKnobBase));

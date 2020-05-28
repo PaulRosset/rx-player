@@ -47,7 +47,7 @@ interface INetworkAnalizerClockTick {
 function getConcernedRequest(
   requests : IRequestInfo[],
   neededPosition : number
-) : IRequestInfo|undefined {
+) : IRequestInfo | undefined {
   for (let i = 0; i < requests.length; i++) {
     const request = requests[i];
     if (request.duration > 0) {
@@ -115,13 +115,13 @@ function estimateStarvationModeBitrate(
 ) : number|undefined {
   const nextNeededPosition = clock.currentTime + clock.bufferGap;
   const concernedRequest = getConcernedRequest(pendingRequests, nextNeededPosition);
-  if (!concernedRequest) {
+  if (concernedRequest === undefined) {
     return undefined;
   }
 
   const chunkDuration = concernedRequest.duration;
   const now = performance.now();
-  const lastProgressEvent = concernedRequest.progress ?
+  const lastProgressEvent = concernedRequest.progress.length > 0 ?
     concernedRequest.progress[concernedRequest.progress.length - 1] :
     null;
 
@@ -141,15 +141,15 @@ function estimateStarvationModeBitrate(
   }
 
   const requestElapsedTime = (now - concernedRequest.requestTimestamp) / 1000;
-  if (
-    currentRepresentation == null ||
-    requestElapsedTime <= ((chunkDuration * 1.5 + 1) / clock.speed)
-  ) {
+  const reasonableElapsedTime = requestElapsedTime <=
+    ((chunkDuration * 1.5 + 1) / clock.speed);
+  if (currentRepresentation == null || reasonableElapsedTime) {
     return undefined;
   }
 
   // calculate a reduced bitrate from the current one
-  const reducedBitrate = currentRepresentation.bitrate * 0.7;
+  const factor = chunkDuration / requestElapsedTime;
+  const reducedBitrate = currentRepresentation.bitrate * Math.min(0.7, factor);
   if (lastEstimatedBitrate == null || reducedBitrate < lastEstimatedBitrate) {
     return reducedBitrate;
   }
@@ -175,12 +175,12 @@ function shouldDirectlySwitchToLowBitrate(
    const nextNeededRequest = arrayFind(requests, (r) =>
      (r.time + r.duration) > nextNeededPosition
    );
-   if (!nextNeededRequest) {
+   if (nextNeededRequest === undefined) {
      return true;
    }
 
    const now = performance.now();
-   const lastProgressEvent = nextNeededRequest.progress ?
+   const lastProgressEvent = nextNeededRequest.progress.length > 0 ?
      nextNeededRequest.progress[nextNeededRequest.progress.length - 1] :
      null;
 

@@ -1,7 +1,7 @@
 /* eslint-env node */
 
 const BundleAnalyzerPlugin = require("webpack-bundle-analyzer").BundleAnalyzerPlugin;
-const UglifyJsPlugin = require("uglifyjs-webpack-plugin");
+const TerserPlugin = require("terser-webpack-plugin");
 const webpack = require("webpack");
 
 const RXP_ENV = process.env.RXP_ENV || "production";
@@ -25,6 +25,8 @@ const plugins = [
       DASH: isBarebone ?
         process.env.RXP_DASH === "true" :
         process.env.RXP_DASH !== "false",
+
+      LOCAL_MANIFEST: process.env.RXP_LOCAL_MANIFEST === "true",
 
       METAPLAYLIST: process.env.RXP_METAPLAYLIST === "true",
 
@@ -80,6 +82,7 @@ const plugins = [
       BIF_PARSER: JSON.stringify("../parsers/images/bif.ts"),
       SMOOTH: JSON.stringify("../transports/smooth/index.ts"),
       DASH: JSON.stringify("../transports/dash/index.ts"),
+      LOCAL_MANIFEST: JSON.stringify("../transports/local/index.ts"),
       METAPLAYLIST: JSON.stringify("../transports/metaplaylist/index.ts"),
       NATIVE_TEXT_BUFFER: JSON.stringify("../custom_source_buffers/text/native/index.ts"),
       NATIVE_VTT: JSON.stringify("../parsers/texttracks/webvtt/native/index.ts"),
@@ -92,6 +95,7 @@ const plugins = [
       HTML_TTML: JSON.stringify("../parsers/texttracks/ttml/html/index.ts"),
       HTML_SAMI: JSON.stringify("../parsers/texttracks/sami/html.ts"),
       DIRECTFILE: JSON.stringify("../core/init/initialize_directfile.ts"),
+      MEDIA_ELEMENT_TRACK_CHOICE_MANAGER: JSON.stringify("../core/api/media_element_track_choice_manager.ts"),
     },
     __DEV__: isDevMode,
     __LOGGER_LEVEL__: isDevMode ? "\"INFO\"" : "\"DEBUG\"",
@@ -107,37 +111,20 @@ if (shouldReportSize) {
 
 module.exports = {
   mode: isDevMode ? "development" : "production",
-  entry: "./src/exports.ts",
+  entry: "./src/index.ts",
   output: {
     library: "RxPlayer",
     libraryTarget: "umd",
+    libraryExport: "default",
     filename: shouldMinify ? "rx-player.min.js" : "rx-player.js",
   },
   optimization: {
-    minimizer: shouldMinify ? [new UglifyJsPlugin()] : [
-      new UglifyJsPlugin({
-        uglifyOptions: {
-          compress: {
-            keep_infinity: true,
-            inline: false,
-            reduce_funcs: false, // does not work well on commentated funcs.
-                                 // TODO open issue on uglify
-          },
-          keep_fnames: true,
-          keep_classnames: true,
-          keep_fargs: true,
-          mangle: false,
-          output: {
-            beautify: true,
-            comments: true,
-          },
-        },
-      }),
-    ],
+    minimize: shouldMinify,
+    minimizer: shouldMinify ? [new TerserPlugin()] : [],
   },
   performance: {
-    maxEntrypointSize: shouldMinify ? 400000 : 1700000,
-    maxAssetSize: shouldMinify ? 400000 : 1700000,
+    maxEntrypointSize: shouldMinify ? 450000 : 2000000,
+    maxAssetSize: shouldMinify ? 450000 : 2000000,
   },
   resolve: {
     extensions: [".ts", ".tsx", ".js", ".jsx", ".json"],

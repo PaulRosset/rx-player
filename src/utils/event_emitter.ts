@@ -19,6 +19,7 @@ import {
   Observer,
 } from "rxjs";
 import log from "../log";
+import isNullOrUndefined from "./is_null_or_undefined";
 
 export interface IEventEmitter<T> {
   addEventListener<TEventName extends keyof T>(evt : TEventName,
@@ -71,7 +72,7 @@ export default class EventEmitter<T> implements IEventEmitter<T> {
     fn : IListener<T, TEventName>
   ) : void {
     const listeners = this._listeners[evt];
-    if (!listeners) {
+    if (!Array.isArray(listeners)) {
       this._listeners[evt] = [fn];
     } else {
       listeners.push(fn);
@@ -91,26 +92,26 @@ export default class EventEmitter<T> implements IEventEmitter<T> {
     evt? : TEventName,
     fn? : IListener<T, TEventName>
   ) : void {
-    if (evt == null) {
+    if (isNullOrUndefined(evt)) {
       this._listeners = {};
       return;
     }
 
     const listeners = this._listeners[evt];
-    if (!listeners) {
+    if (!Array.isArray(listeners)) {
       return;
     }
-    if (fn == null) {
+    if (isNullOrUndefined(fn)) {
       delete this._listeners[evt];
       return;
     }
 
     const index = listeners.indexOf(fn);
-    if (~index) {
+    if (index !== -1) {
       listeners.splice(index, 1);
     }
 
-    if (!listeners.length) {
+    if (listeners.length === 0) {
       delete this._listeners[evt];
     }
   }
@@ -126,7 +127,7 @@ export default class EventEmitter<T> implements IEventEmitter<T> {
     arg : IArgs<T, TEventName>
   ) : void {
     const listeners = this._listeners[evt];
-    if (!listeners) {
+    if (!Array.isArray(listeners)) {
       return;
     }
 
@@ -134,7 +135,8 @@ export default class EventEmitter<T> implements IEventEmitter<T> {
       try {
         listener(arg);
       } catch (e) {
-        log.error(e, e.stack);
+        log.error(e, e instanceof Error ? e.stack :
+                                          null);
       }
     });
   }

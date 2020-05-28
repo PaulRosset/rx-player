@@ -227,7 +227,7 @@ export default {
    * because of a discontinuity in the downloaded range.
    * @type {Number}
    */
-  DISCONTINUITY_THRESHOLD: 1,
+  BUFFER_DISCONTINUITY_THRESHOLD: 1,
 
   /**
    * Ratio used to know if an already loaded segment should be re-buffered.
@@ -275,13 +275,13 @@ export default {
    *   - if the error is an HTTP error code, but not a 500-smthg or a 404, no
    *     retry will be performed.
    *   - if it has a high chance of being due to the user being offline, a
-   *     separate counter is used (see DEFAULT_MAX_PIPELINES_RETRY_ON_OFFLINE).
+   *     separate counter is used (see DEFAULT_MAX_REQUESTS_RETRY_ON_OFFLINE).
    * @type Number
    */
   DEFAULT_MAX_MANIFEST_REQUEST_RETRY: 4,
 
   /**
-   * The default number of times a pipeline request will be re-performed when
+   * The default number of times a segment request will be re-performed when
    * on error which justify a retry.
    *
    * Note that some errors do not use this counter:
@@ -289,10 +289,10 @@ export default {
    *   - if the error is an HTTP error code, but not a 500-smthg or a 404, no
    *     retry will be performed.
    *   - if it has a high chance of being due to the user being offline, a
-   *     separate counter is used (see DEFAULT_MAX_PIPELINES_RETRY_ON_OFFLINE).
+   *     separate counter is used (see DEFAULT_MAX_REQUESTS_RETRY_ON_OFFLINE).
    * @type Number
    */
-  DEFAULT_MAX_PIPELINES_RETRY_ON_ERROR: 4,
+  DEFAULT_MAX_REQUESTS_RETRY_ON_ERROR: 4,
 
   /**
    * Under some circonstances, we're able to tell that the user is offline (see
@@ -305,7 +305,7 @@ export default {
    * A capped exponential backoff will still be used (like for an error code).
    * @type {Number}
    */
-  DEFAULT_MAX_PIPELINES_RETRY_ON_OFFLINE: Infinity,
+  DEFAULT_MAX_REQUESTS_RETRY_ON_OFFLINE: Infinity,
 
   /**
    * Initial backoff delay when a segment / manifest download fails, in
@@ -403,8 +403,8 @@ export default {
    * @type {Object}
    */
   ABR_REGULAR_FACTOR: {
-    DEFAULT: 0.90,
-    LOW_LATENCY: 0.90,
+    DEFAULT: 0.9,
+    LOW_LATENCY: 0.9,
   },
 
   /**
@@ -510,40 +510,16 @@ export default {
   },
 
   /**
-   * Maximum difference allowed between a segment _announced_ start (what the
-   * rx-player infers to be the starting time) and its _real_  current starting
-   * time in the SourceBuffer, in seconds, until the segment is considered
-   * "incomplete".
-   * Same for the ending time announced and its effective end time in the source
-   * buffer.
+   * Maximum authorized difference between what we calculated to be the
+   * beginning or end of the segment in the SourceBuffer and what we
+   * actually are noticing now.
    *
-   * If the difference is bigger than this value, the segment will be considered
-   * incomplete (e.g. considered as partially garbage-collected) and as such
-   * might be re-downloaded.
-   *
-   * Keeping a too high value might lead to incomplete segments being wrongly
-   * considered as complete (and thus not be re-downloaded, this could lead the
-   * player to stall).
-   * Note that in a worst-case scenario this can happen for the end of a segment
-   * and the start of the contiguous segment, leading to a discontinuity two
-   * times this value.
-   *
-   * Keeping a too low value might lead to re-downloading the same segment
-   * multiple times (when the start and end times are badly estimated) as they
-   * will wrongly believed to be partially garbage-collected.
-   *
-   * If a segment has a perfect continuity with a previous/following one in the
-   * SourceBuffer the start/end of it will not be checked. This allows to limit
-   * the number of time this error-prone logic is applied.
-   *
-   * Note that in most cases, the rx-player's start and end times estimations
-   * are __really__ close to what they really are in the sourcebuffer (we
-   * usually have a difference in the order of 10^-7), as time information is
-   * most of the time directly parsed from the media container.
-   *
+   * If the segment seems to have removed more than this size in seconds, we
+   * will infer that the segment has been garbage collected and we might try to
+   * re-download it.
    * @type {Number}
    */
-  MAX_TIME_MISSING_FROM_COMPLETE_SEGMENT: 0.12,
+  MAX_TIME_MISSING_FROM_COMPLETE_SEGMENT: 0.15,
 
   /**
    * The maximum authorized difference, in seconds, between the real buffered
@@ -559,7 +535,24 @@ export default {
    * partly garbage collected (instead of complete segments).
    * @type {Number}
    */
-  MAX_MANIFEST_BUFFERED_DIFFERENCE: 0.4,
+  MAX_MANIFEST_BUFFERED_START_END_DIFFERENCE: 0.4,
+
+  /**
+   * The maximum authorized difference, in seconds, between the duration a
+   * segment should have according to the Manifest and the actual duration it
+   * seems to have once pushed to the SourceBuffer.
+   *
+   * Setting a value too high can lead to parts of the SourceBuffer being
+   * linked to the wrong segments and to segments wrongly believed to be still
+   * complete (instead of garbage collected).
+   *
+   * Setting a value too low can lead to parts of the SourceBuffer not being
+   * linked to the concerned segment and to segments wrongly believed to be
+   * partly garbage collected (instead of complete segments). This last point
+   * could lead to unnecessary segment re-downloading.
+   * @type {Number}
+   */
+  MAX_MANIFEST_BUFFERED_DURATION_DIFFERENCE: 0.3,
 
   /**
    * Minimum duration in seconds a segment should be into a buffered range to be
@@ -579,7 +572,29 @@ export default {
    * this logic could lead to bugs with the current code.
    * @type {Number}
    */
-  MINIMUM_SEGMENT_SIZE: 0.05,
+  MINIMUM_SEGMENT_SIZE: 0.005,
+
+  /**
+   * Append windows allow to filter media data from segments if they are outside
+   * a given limit.
+   * Coded frames with presentation timestamp within this range are allowed to
+   * be appended to the SourceBuffer while coded frames outside this range are
+   * filtered out.
+   *
+   * Those are often set to be the start and end of the "Period" the segment is
+   * in.
+   * However, we noticed that some browsers were too aggressive when the exact
+   * limits were set: more data than needed was removed, often leading to
+   * discontinuities.
+   *
+   * Those securities are added to the set windows (substracted from the window
+   * start and added to the window end) to avoid those problems.
+   * @type {Object}
+   */
+  APPEND_WINDOW_SECURITIES: {
+    START: 0.2,
+    END: 0.1,
+  },
 
   /**
    * Maximum interval at which text tracks are refreshed in an "html"
@@ -598,6 +613,24 @@ export default {
    * @type {Number}
    */
   MAXIMUM_HTML_TEXT_TRACK_UPDATE_INTERVAL: 50,
+
+  /**
+   * On browsers with no ResizeObserver API, this will be the interval in
+   * milliseconds at which we should check if the text track element has
+   * changed its size, and updates proportional text-track data accordingly
+   * (like a proportional font-size).
+   *
+   * This is only used:
+   *   - in an "html" textTrackMode
+   *   - when some styling is proportional in the text track data
+   *
+   * Putting a value too low will render faster but might use to much proc time.
+   * Putting a value too high might provoke a re-render too late after the user
+   * changed the element's size (e.g. when going to fullscreen mode).
+   *
+   * @type {Number}
+   */
+  TEXT_TRACK_SIZE_CHECKS_INTERVAL: 250,
 
   /**
    * The Buffer padding is a time offset from the current time that affects
@@ -712,8 +745,37 @@ export default {
     playready: [ "com.microsoft.playready",
                  "com.chromecast.playready",
                  "com.youtube.playready" ],
+    fairplay: [ "com.apple.fps.1_0" ],
   } as Partial<Record<string, string[]>>,
   /* tslint:enable no-object-literal-type-assertion */
+
+  /**
+   * The Manifest parsing logic has a notion of "unsafeMode" which allows to
+   * speed-up this process a lot with a small risk of de-synchronization with
+   * what actually is on the server.
+   * Because using that mode is risky, and can lead to all sort of problems, we
+   * regularly should fall back to a regular "safe" parsing every once in a
+   * while.
+   * This value defines how many consecutive time maximum the "unsafeMode"
+   * parsing can be done.
+   */
+  MAX_CONSECUTIVE_MANIFEST_PARSING_IN_UNSAFE_MODE: 10,
+
+  /**
+   * Minimum time spent parsing the Manifest before we can authorize parsing
+   * it in an "unsafeMode", to speed-up the process with a little risk.
+   * Please note that this parsing time also sometimes includes idle time such
+   * as when the parser is waiting for a request to finish.
+   */
+  MIN_MANIFEST_PARSING_TIME_TO_ENTER_UNSAFE_MODE: 200,
+
+  /**
+   * Minimum amount of <S> elements in a DASH MPD's <SegmentTimeline> element
+   * necessary to begin parsing the current SegmentTimeline element in an
+   * unsafe manner (meaning: with risks of de-synchronization).
+   * This is only done when the "unsafeMode" parsing mode is enabled.
+   */
+  MIN_DASH_S_ELEMENTS_TO_PARSE_UNSAFELY: 300,
 
   /**
    * When we detect that the local Manifest might be out-of-sync with the
@@ -726,6 +788,32 @@ export default {
    * @type {Number}
    */
   OUT_OF_SYNC_MANIFEST_REFRESH_DELAY: 3000,
+
+  /**
+   * When a partial Manifest update (that is an update with a partial sub-set
+   * of the Manifest) fails, we will perform an update with the whole Manifest
+   * instead.
+   * To not overload the client - as parsing a Manifest can be resource heavy -
+   * we set a minimum delay to wait before doing the corresponding request.
+   * @type {Number}
+   */
+  FAILED_PARTIAL_UPDATE_MANIFEST_REFRESH_DELAY: 3000,
+
+  /**
+   * DASH Manifest based on a SegmentTimeline should normally have an
+   * MPD@minimumUpdatePeriod attribute which should be sufficient to
+   * know when to refresh it.
+   * However, there is a specific case, for when it is equal to 0.
+   * As of DASH-IF IOP (valid in v4.3), when a DASH's MPD set a
+   * MPD@minimumUpdatePeriod to `0`, a client should not refresh the MPD
+   * unless told to do so through inband events, in the stream.
+   * In reality however, we found it to not always be the case (even with
+   * DASH-IF own streams) and moreover to not always be the best thing to do.
+   * We prefer to refresh in average at a regular interval when we do not have
+   * this information.
+   * /!\ This value is expressed in seconds.
+   */
+  DASH_FALLBACK_LIFETIME_WHEN_MINIMUM_UPDATE_PERIOD_EQUAL_0: 3,
 
   /**
    * Max simultaneous MediaKeySessions that will be kept as a cache to avoid
@@ -786,4 +874,22 @@ export default {
    * @type {Number}
    */
   SOURCE_BUFFER_FLUSHING_INTERVAL: 2000,
+
+  /**
+   * Padding under which we should not buffer from the current time, on
+   * Safari. To avoid some buffer appending issues on it, we decide not
+   * to load a segment if it may be pushed during playback time.
+   * @type {Number} - in seconds
+   */
+  CONTENT_REPLACEMENT_PADDING: 2,
+
+  /**
+   * For video and audio segments, determines two thresholds below which :
+   * - The segment is considered as loaded from cache
+   * - The segment may be loaded from cache depending on the previous request
+   */
+  CACHE_LOAD_DURATION_THRESHOLDS: {
+    video: 50,
+    audio: 10,
+  },
 };

@@ -67,13 +67,6 @@ export default class PendingRequestsStore {
    */
   public add(payload : IBeginRequestValue) : void {
     const { id, time, duration, requestTimestamp } = payload;
-    if (this._currentRequests[id]) {
-      if (__DEV__) {
-        throw new Error("ABR: request already added.");
-      }
-      log.warn("ABR: request already added.");
-      return;
-    }
     this._currentRequests[id] = { time,
                                   duration,
                                   requestTimestamp,
@@ -86,7 +79,7 @@ export default class PendingRequestsStore {
    */
   public addProgress(progress : IProgressEventValue) : void {
     const request = this._currentRequests[progress.id];
-    if (!request) {
+    if (request == null) {
       if (__DEV__) {
         throw new Error("ABR: progress for a request not added");
       }
@@ -101,7 +94,7 @@ export default class PendingRequestsStore {
    * @param {string} id
    */
   public remove(id : string) : void {
-    if (!this._currentRequests[id]) {
+    if (this._currentRequests[id] == null) {
       if (__DEV__) {
         throw new Error("ABR: can't remove unknown request");
       }

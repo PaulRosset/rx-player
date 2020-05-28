@@ -15,12 +15,25 @@
  */
 
 import { IPeriodIntermediateRepresentation } from "./node_parsers/Period";
-import { IManifestInfos } from "./parse_periods";
 
+/** Time information from a Period. */
 interface IPeriodTimeInformation {
+  /** Time in seconds at which the Period starts. */
   periodStart: number;
+  /** Difference in seconds between the Period's end and its start. */
   periodDuration?: number;
+  /** Time in seconds at which the Period ends. */
   periodEnd?: number;
+}
+
+/** Additionnal context needed to retrieve the period time information. */
+export interface IParsedPeriodsContext {
+  /** Value of MPD@availabilityStartTime. */
+  availabilityStartTime : number;
+  /** Value of MPD@mediaPresentationDuration. */
+  duration? : number;
+  /** `true` if MPD@type is equal to "dynamic". */
+  isDynamic : boolean;
 }
 
 /**
@@ -31,8 +44,8 @@ interface IPeriodTimeInformation {
  * @return {Array.<Object>}
  */
 export default function getPeriodsTimeInformation(
-  periodsIR: IPeriodIntermediateRepresentation[],
-  manifestInfos: IManifestInfos
+  periodsIR : IPeriodIntermediateRepresentation[],
+  manifestInfos : IParsedPeriodsContext
 ): IPeriodTimeInformation[] {
   const periodsTimeInformation: IPeriodTimeInformation[] = [];
   periodsIR.forEach((currentPeriod, i) => {

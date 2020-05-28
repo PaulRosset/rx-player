@@ -17,6 +17,7 @@
 import { of as observableOf } from "rxjs";
 import features from "../../features";
 import request from "../../utils/request";
+import takeFirstSet from "../../utils/take_first_set";
 import {
   IImageParserObservable,
   ISegmentLoaderArguments,
@@ -29,14 +30,14 @@ import {
  * @returns {Observable}
  */
 export function imageLoader(
-  { segment } : ISegmentLoaderArguments
+  { segment,
+    url } : ISegmentLoaderArguments
 ) : ISegmentLoaderObservable< ArrayBuffer | null > {
-  if (segment.isInit || segment.mediaURL == null) {
+  if (segment.isInit || url === null) {
     return observableOf({ type: "data-created" as const,
                           value: { responseData: null } });
   }
-  const { mediaURL } = segment;
-  return request({ url: mediaURL,
+  return request({ url,
                    responseType: "arraybuffer",
                    sendProgressEvents: true });
 }
@@ -52,32 +53,45 @@ export function imageParser(
   const { segment, period } = content;
   const { data, isChunked } = response;
 
+  if (content.segment.isInit) { // image init segment has no use
+    return observableOf({ type: "parsed-init-segment",
+                          value: { initializationData: null,
+                                   segmentProtections: [],
+                                   initTimescale: undefined } });
+  }
+
   if (isChunked) {
     throw new Error("Image data should not be downloaded in chunks");
   }
 
+  const chunkOffset = takeFirstSet<number>(segment.timestampOffset, 0);
+
   // TODO image Parsing should be more on the sourceBuffer side, no?
-  if (data === null || features.imageParser == null) {
-    return observableOf({ chunkData: null,
-                          chunkInfos: segment.timescale > 0 ?
-                            { duration: segment.isInit ? 0 : segment.duration,
-                              time: segment.isInit ? -1 : segment.time,
-                              timescale: segment.timescale } :
-                            null,
-                          chunkOffset: segment.timestampOffset || 0,
-                          appendWindow: [period.start, period.end] });
+  if (data === null || features.imageParser === null) {
+    return observableOf({ type: "parsed-segment",
+                          value: { chunkData: null,
+                                   chunkInfos: segment.timescale > 0 ?
+                                     { duration: segment.isInit ? 0 :
+                                                                  segment.duration,
+                                       time: segment.isInit ? -1 :
+                                                              segment.time,
+                                       timescale: segment.timescale } :
+                                     null,
+                                    chunkOffset,
+                                    appendWindow: [period.start, period.end] } });
   }
 
   const bifObject = features.imageParser(new Uint8Array(data));
   const thumbsData = bifObject.thumbs;
-  return observableOf({ chunkData: { data: thumbsData,
-                                       start: 0,
-                                       end: Number.MAX_VALUE,
-                                       timescale: 1,
-                                       type: "bif" },
-                        chunkInfos: { time: 0,
-                                        duration: Number.MAX_VALUE,
-                                        timescale: bifObject.timescale },
-                        chunkOffset: segment.timestampOffset || 0,
-                        appendWindow: [period.start, period.end] });
+  return observableOf({ type: "parsed-segment",
+                        value: { chunkData: { data: thumbsData,
+                                              start: 0,
+                                              end: Number.MAX_VALUE,
+                                              timescale: 1,
+                                              type: "bif" },
+                                 chunkInfos: { time: 0,
+                                               duration: Number.MAX_VALUE,
+                                               timescale: bifObject.timescale },
+                                 chunkOffset,
+                                 appendWindow: [period.start, period.end] } });
 }

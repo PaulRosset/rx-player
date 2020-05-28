@@ -29,17 +29,16 @@ import {
   map,
   mergeMap,
   takeUntil,
+  tap,
 } from "rxjs/operators";
 import { MediaError } from "../../errors";
 import log from "../../log";
-import Manifest, {
-  Period,
-} from "../../manifest";
+import Manifest from "../../manifest";
 import ABRManager from "../abr";
 import BufferOrchestrator, {
   IBufferOrchestratorEvent,
 } from "../buffers";
-import { SegmentPipelinesManager } from "../pipelines";
+import { SegmentFetcherCreator } from "../fetchers";
 import SourceBuffersStore, {
   ITextTrackSourceBufferOptions,
 } from "../source_buffers";
@@ -47,7 +46,9 @@ import createBufferClock from "./create_buffer_clock";
 import { setDurationToMediaSource } from "./create_media_source";
 import { maintainEndOfStream } from "./end_of_stream";
 import EVENTS from "./events_generators";
+import getDiscontinuities from "./get_discontinuities";
 import getStalledEvents from "./get_stalled_events";
+import handleDiscontinuity from "./handle_discontinuity";
 import seekAndLoadOnMediaEvents from "./initial_seek_and_play";
 import {
   IInitClockTick,
@@ -58,24 +59,26 @@ import {
 } from "./types";
 import updatePlaybackRate from "./update_playback_rate";
 
-// Arguments needed by createMediaSourceLoader
+// Arguments needed by `createMediaSourceLoader`
 export interface IMediaSourceLoaderArguments {
-  mediaElement : HTMLMediaElement; // Media Element on which the content will be
-                                   // played
-  manifest : Manifest; // Manifest of the content we want to
-                                         // play
-  clock$ : Observable<IInitClockTick>; // Emit position information
-  speed$ : Observable<number>; // Emit the speed.
-                               // /!\ Should replay the last value on subscription.
-  abrManager : ABRManager;
-  segmentPipelinesManager : SegmentPipelinesManager<any>;
+  abrManager : ABRManager; // Helps to choose the right Representation
   bufferOptions : { // Buffers-related options
-    wantedBufferAhead$ : BehaviorSubject<number>;
-    maxBufferAhead$ : Observable<number>;
-    maxBufferBehind$ : Observable<number>;
-    textTrackOptions : ITextTrackSourceBufferOptions;
+    wantedBufferAhead$ : BehaviorSubject<number>; // buffer "goal"
+    maxBufferAhead$ : Observable<number>; // To GC after the current position
+    maxBufferBehind$ : Observable<number>; // to GC before the current position
+    textTrackOptions : ITextTrackSourceBufferOptions; // TextTrack configuration
+
+    // strategy when switching the current bitrate manually
     manualBitrateSwitchingMode : "seamless"|"direct";
   };
+  clock$ : Observable<IInitClockTick>; // Emit position information
+  manifest : Manifest; // Manifest of the content we want to play
+  mediaElement : HTMLMediaElement; // Media Element on which the content will be
+                                   // played
+  segmentFetcherCreator : SegmentFetcherCreator<any>; // Interface to download
+                                                        // segments
+  speed$ : Observable<number>; // Emit the speed.
+                               // /!\ Should replay the last value on subscription.
 }
 
 // Events emitted when loading content in the MediaSource
@@ -98,10 +101,10 @@ export default function createMediaSourceLoader({
   speed$,
   bufferOptions,
   abrManager,
-  segmentPipelinesManager,
+  segmentFetcherCreator,
 } : IMediaSourceLoaderArguments) : (
   mediaSource : MediaSource,
-  position : number,
+  initialTime : number,
   autoPlay : boolean
 ) => Observable<IMediaSourceLoaderEvent> {
   /**
@@ -116,9 +119,9 @@ export default function createMediaSourceLoader({
     autoPlay : boolean
   ) {
     // TODO Update the duration if it evolves?
-    const duration = manifest.getDuration();
-    setDurationToMediaSource(mediaSource, duration == null ? Infinity :
-                                                             duration);
+    const duration = manifest.isLive ? Infinity :
+                                       manifest.getMaximumPosition();
+    setDurationToMediaSource(mediaSource, duration);
 
     const initialPeriod = manifest.getPeriodForTime(initialTime);
     if (initialPeriod == null) {
@@ -130,20 +133,11 @@ export default function createMediaSourceLoader({
     // single SourceBuffer per type.
     const sourceBuffersStore = new SourceBuffersStore(mediaElement, mediaSource);
 
-    // Initialize all native source buffers from the first period at the same
-    // time.
-    // We cannot lazily create native sourcebuffers since the spec does not
-    // allow adding them during playback.
-    //
-    // From https://w3c.github.io/media-source/#methods
-    //    For example, a user agent may throw a QuotaExceededError
-    //    exception if the media element has reached the HAVE_METADATA
-    //    readyState. This can occur if the user agent's media engine
-    //    does not support adding more tracks during playback.
-    createNativeSourceBuffersForPeriod(sourceBuffersStore, initialPeriod);
-
-    const { seek$, load$ } =
-      seekAndLoadOnMediaEvents(clock$, mediaElement, initialTime, autoPlay);
+    const { seek$, load$ } = seekAndLoadOnMediaEvents({ clock$,
+                                                        mediaElement,
+                                                        startTime: initialTime,
+                                                        mustAutoPlay: autoPlay,
+                                                        isDirectfile: false });
 
     const initialPlay$ = load$.pipe(filter((evt) => evt !== "not-loaded-metadata"));
     const bufferClock$ = createBufferClock(clock$, { autoPlay,
@@ -161,7 +155,7 @@ export default function createMediaSourceLoader({
                                         bufferClock$,
                                         abrManager,
                                         sourceBuffersStore,
-                                        segmentPipelinesManager,
+                                        segmentFetcherCreator,
                                         bufferOptions
     ).pipe(
       mergeMap((evt) : Observable<IMediaSourceLoaderEvent> => {
@@ -176,9 +170,9 @@ export default function createMediaSourceLoader({
             cancelEndOfStream$.next(null);
             return EMPTY;
           case "discontinuity-encountered":
-            if (SourceBuffersStore.isNative(evt.value.bufferType)) {
-              log.warn("Init: Explicit discontinuity seek", evt.value.nextTime);
-              mediaElement.currentTime = evt.value.nextTime;
+            const { bufferType, gap } = evt.value;
+            if (SourceBuffersStore.isNative(bufferType)) {
+              handleDiscontinuity(gap[1], mediaElement);
             }
             return EMPTY;
           default:
@@ -195,8 +189,16 @@ export default function createMediaSourceLoader({
 
     // Create Stalling Manager, an observable which will try to get out of
     // various infinite stalling issues
-    const stalled$ = getStalledEvents(mediaElement, clock$)
+    const stalled$ = getStalledEvents(clock$)
       .pipe(map(EVENTS.stalled));
+
+    const handledDiscontinuities$ = getDiscontinuities(clock$, manifest).pipe(
+      tap((gap) => {
+        const seekTo = gap[1];
+        handleDiscontinuity(seekTo, mediaElement);
+      }),
+      ignoreElements()
+    );
 
     const loadedEvent$ = load$
       .pipe(mergeMap((evt) => {
@@ -204,7 +206,8 @@ export default function createMediaSourceLoader({
           const error = new MediaError("MEDIA_ERR_BLOCKED_AUTOPLAY",
                                        "Cannot trigger auto-play automatically: " +
                                        "your browser does not allow it.");
-          return observableOf(EVENTS.warning(error), EVENTS.loaded());
+          return observableOf(EVENTS.warning(error),
+                              EVENTS.loaded(sourceBuffersStore));
         } else if (evt === "not-loaded-metadata") {
           const error = new MediaError("MEDIA_ERR_NOT_LOADED_METADATA",
                                        "Cannot load automatically: your browser " +
@@ -212,41 +215,17 @@ export default function createMediaSourceLoader({
           return observableOf(EVENTS.warning(error));
         }
         log.debug("Init: The current content is loaded.");
-        return observableOf(EVENTS.loaded());
+        return observableOf(EVENTS.loaded(sourceBuffersStore));
       }));
 
-    return observableMerge(loadedEvent$, playbackRate$, stalled$, buffers$)
-      .pipe(finalize(() => {
+    return observableMerge(handledDiscontinuities$,
+                           loadedEvent$,
+                           playbackRate$,
+                           stalled$,
+                           buffers$
+    ).pipe(finalize(() => {
         // clean-up every created SourceBuffers
         sourceBuffersStore.disposeAll();
       }));
   };
-}
-
-/**
- * Create all native SourceBuffers needed for a given Period.
- *
- * Native Buffers have the particulary to need to be created at the beginning of
- * the content.
- * Custom source buffers (entirely managed in JS) can generally be created and
- * disposed at will during the lifecycle of the content.
- * @param {SourceBuffersStore} sourceBuffersStore
- * @param {Period} period
- */
-function createNativeSourceBuffersForPeriod(
-  sourceBuffersStore : SourceBuffersStore,
-  period : Period
-) : void {
-  Object.keys(period.adaptations).forEach(bufferType => {
-    if (SourceBuffersStore.isNative(bufferType)) {
-      const adaptations = period.adaptations[bufferType] || [];
-      const representations = adaptations != null &&
-                              adaptations.length ? adaptations[0].representations :
-                                                   [];
-      if (representations.length) {
-        const codec = representations[0].getMimeTypeString();
-        sourceBuffersStore.createSourceBuffer(bufferType, codec);
-      }
-    }
-  });
 }

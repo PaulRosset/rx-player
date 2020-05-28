@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-// import objectAssign from "object-assign";
 import config from "../../../config";
 import log from "../../../log";
 import {
@@ -27,6 +26,7 @@ import {
   parseLoadVideoOptions,
 } from "../option_parsers";
 
+/* tslint:disable no-unsafe-any */
 jest.mock("../../../log");
 jest.mock("../../../utils/languages");
 jest.mock("../../../utils/warn_once");
@@ -81,6 +81,7 @@ describe("API - parseConstructorOptions", () => {
     stopAtEnd: true,
     preferredAudioTracks: [],
     preferredTextTracks: [],
+    preferredVideoTracks: [],
   };
 
   it("should create default values if no option is given", () => {
@@ -337,6 +338,17 @@ describe("API - parseConstructorOptions", () => {
     });
   });
 
+  it("should authorize setting a preferredVideoTracks option", () => {
+    const preferredVideoTracks = [
+      { codec: { all: true, test: /hvc/ } },
+      null,
+    ];
+    expect(parseConstructorOptions({ preferredVideoTracks })).toEqual({
+      ...defaultConstructorOptions,
+      preferredVideoTracks,
+    });
+  });
+
   it("should throw if the maxBufferAhead given is not a number", () => {
     expect(() => parseConstructorOptions({ maxBufferAhead: "a" as any })).toThrow();
     expect(() => parseConstructorOptions({ maxBufferAhead: /a/ as any })).toThrow();
@@ -409,14 +421,17 @@ describe("API - parseLoadVideoOptions", () => {
     hideNativeSubtitle: false,
     keySystems: [],
     lowLatencyMode: false,
-    manualBitrateSwitchingMode: false,
+    manualBitrateSwitchingMode: "seamless",
+    minimumManifestUpdateInterval: 0,
     networkConfig: {},
     startAt: undefined,
-    supplementaryImageTracks: [],
-    supplementaryTextTracks: [],
     textTrackElement: undefined,
     textTrackMode: "native",
-    transportOptions: {},
+    transportOptions: {
+      lowLatencyMode: false,
+      supplementaryTextTracks: [],
+      supplementaryImageTracks: [],
+    },
   };
 
   it("should throw if no option is given", () => {
@@ -491,7 +506,10 @@ describe("API - parseLoadVideoOptions", () => {
     })).toEqual({
       ...defaultLoadVideoOptions,
       transport: "bar",
-      transportOptions: { manifestLoader },
+      transportOptions: { lowLatencyMode: false,
+                          manifestLoader,
+                          supplementaryImageTracks: [],
+                          supplementaryTextTracks: [] },
     });
   });
 
@@ -696,9 +714,32 @@ describe("API - parseLoadVideoOptions", () => {
       transport: "bar",
     })).toEqual({
       ...defaultLoadVideoOptions,
+      lowLatencyMode: true,
+      transport: "bar",
+      url: "foo",
+      transportOptions: { lowLatencyMode: true,
+                          supplementaryImageTracks: [],
+                          supplementaryTextTracks: [] },
+    });
+  });
+
+  it("should authorize setting a minimumManifestUpdateInterval option", () => {
+    expect(parseLoadVideoOptions({
       url: "foo",
       transport: "bar",
-      lowLatencyMode: true,
+      transportOptions: {
+        minimumManifestUpdateInterval: 5400,
+      },
+    })).toEqual({
+      ...defaultLoadVideoOptions,
+      minimumManifestUpdateInterval: 5400,
+      url: "foo",
+      transport: "bar",
+      transportOptions: {
+        lowLatencyMode: false,
+        supplementaryImageTracks: [],
+        supplementaryTextTracks: [],
+      },
     });
   });
 
@@ -848,7 +889,11 @@ describe("API - parseLoadVideoOptions", () => {
       ...defaultLoadVideoOptions,
       url: "foo",
       transport: "bar",
-      supplementaryImageTracks: [supplementaryImageTracks1],
+      transportOptions: {
+        lowLatencyMode: false,
+        supplementaryImageTracks: [supplementaryImageTracks1],
+        supplementaryTextTracks: [],
+      },
     });
     expect(parseLoadVideoOptions({
       supplementaryImageTracks: [supplementaryImageTracks1, supplementaryImageTracks2],
@@ -858,7 +903,12 @@ describe("API - parseLoadVideoOptions", () => {
       ...defaultLoadVideoOptions,
       url: "foo",
       transport: "bar",
-      supplementaryImageTracks: [supplementaryImageTracks1, supplementaryImageTracks2],
+      transportOptions: {
+        lowLatencyMode: false,
+        supplementaryImageTracks: [ supplementaryImageTracks1,
+                                    supplementaryImageTracks2 ],
+        supplementaryTextTracks: [],
+      },
     });
   });
 
@@ -935,7 +985,11 @@ describe("API - parseLoadVideoOptions", () => {
       ...defaultLoadVideoOptions,
       url: "foo",
       transport: "bar",
-      supplementaryTextTracks: [supplementaryTextTracks1],
+      transportOptions: {
+        lowLatencyMode: false,
+        supplementaryImageTracks: [],
+        supplementaryTextTracks: [supplementaryTextTracks1],
+      },
     });
     expect(parseLoadVideoOptions({
       supplementaryTextTracks: [
@@ -948,7 +1002,11 @@ describe("API - parseLoadVideoOptions", () => {
       ...defaultLoadVideoOptions,
       url: "foo",
       transport: "bar",
-      supplementaryTextTracks: [supplementaryTextTracks1, supplementaryTextTracks2],
+      transportOptions: {
+        lowLatencyMode: false,
+        supplementaryImageTracks: [],
+        supplementaryTextTracks: [supplementaryTextTracks1, supplementaryTextTracks2],
+      },
     });
   });
 
@@ -1037,7 +1095,10 @@ describe("API - parseLoadVideoOptions", () => {
       ...defaultLoadVideoOptions,
       url: "foo",
       transport: "bar",
-      transportOptions: { segmentLoader: func },
+      transportOptions: { lowLatencyMode: false,
+                          supplementaryImageTracks: [],
+                          supplementaryTextTracks: [],
+                          segmentLoader: func },
     });
   });
 
@@ -1151,3 +1212,4 @@ describe("API - parseLoadVideoOptions", () => {
       "without being in an \"html\" textTrackMode. It will be ignored.");
   });
 });
+/* tslint:enable no-unsafe-any */

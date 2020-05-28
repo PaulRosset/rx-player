@@ -23,12 +23,6 @@ import toHTML, {
   IVTTHTMLCue
 } from "./to_html";
 
-export interface IVTTHTMLCue {
-  start : number;
-  end: number;
-  element : HTMLElement;
-}
-
 /**
  * Parse WebVTT from text. Returns an array with:
  * - start : start of current cue, in seconds
@@ -51,7 +45,7 @@ export default function parseWebVTT(
   const linified = text.split(newLineChar);
 
   const cuesArray : IVTTHTMLCue[] = [];
-  if (!linified[0].match(/^WEBVTT( |\t|\n|\r|$)/)) {
+  if (linified[0].match(/^WEBVTT( |\t|\n|\r|$)/) === null) {
     throw new Error("Can't parse WebVTT: Invalid File.");
   }
 

@@ -15,6 +15,9 @@
  */
 
 import log from "../../../../log";
+import parseBaseURL, {
+  IBaseURL
+} from "./BaseURL";
 import parseContentComponent, {
   IParsedContentComponent
 } from "./ContentComponent";
@@ -49,13 +52,14 @@ export interface IAdaptationSetIntermediateRepresentation {
 
 export interface IAdaptationSetChildren {
   // required
-  baseURL : string; // BaseURL for the contents. Empty string if not defined
+  baseURLs : IBaseURL[];
   representations : IRepresentationIntermediateRepresentation[];
 
   // optional
   accessibility? : IScheme;
   contentComponent? : IParsedContentComponent;
   contentProtections? : IParsedContentProtection[];
+  essentialProperties? : IScheme[];
   roles? : IScheme[];
   supplementalProperties? : IScheme[];
 
@@ -99,7 +103,7 @@ function parseAdaptationSetChildren(
   adaptationSetChildren : NodeList
 ) : IAdaptationSetChildren {
   const children : IAdaptationSetChildren = {
-    baseURL: "",
+    baseURLs: [],
     representations: [],
   };
   const contentProtections = [];
@@ -114,11 +118,22 @@ function parseAdaptationSetChildren(
           break;
 
         case "BaseURL":
-          children.baseURL = currentElement.textContent || "";
+          const baseURLObj = parseBaseURL(currentElement);
+          if (baseURLObj !== undefined) {
+            children.baseURLs.push(baseURLObj);
+          }
           break;
 
         case "ContentComponent":
           children.contentComponent = parseContentComponent(currentElement);
+          break;
+
+        case "EssentialProperty":
+          if (children.essentialProperties == null) {
+            children.essentialProperties = [parseScheme(currentElement)];
+          } else {
+            children.essentialProperties.push(parseScheme(currentElement));
+          }
           break;
 
         case "Representation":
@@ -157,7 +172,7 @@ function parseAdaptationSetChildren(
 
         case "ContentProtection":
           const contentProtection = parseContentProtection(currentElement);
-          if (contentProtection) {
+          if (contentProtection !== undefined) {
             contentProtections.push(contentProtection);
           }
           break;
@@ -172,7 +187,7 @@ function parseAdaptationSetChildren(
       }
     }
   }
-  if (contentProtections.length) {
+  if (contentProtections.length > 0) {
     children.contentProtections = contentProtections;
   }
   return children;

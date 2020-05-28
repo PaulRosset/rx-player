@@ -78,7 +78,7 @@ Such modules are (with link to their respective documentation, if one):
     modifying / deleting a transport protocol
 
 
-  - __the [Pipelines](./pipelines/index.md)__
+  - __the [fetchers](./fetchers/index.md)__
 
     Link the `transport` module with the rest of the code, to download segments,
     download/refresh the manifest and collect data (such as the user's
@@ -113,15 +113,15 @@ To better understand the player's architecture, you can find below a
      +-------------------------------------------+     |  ~~~> Send events |   |
      |                    API                    |     +-------------------+   |
      +-------------------------------------------+                             |
- +--------------+    |            | ^                                          |
- | TrackManager | <--+            | ~                                          |
- +--------------+                 | ~                                          |
+ +--------------------+    |      | ^                                          |
+ | TrackChoiceManager | <--+      | ~                                          |
+ +--------------------+           | ~                                          |
  Facilitate track                 | ~                                          |
  switching for                    V ~                                          |
  the API                  +---------------+                                    |
                           |               |           +----------+ ------> +------------+
  +------------+ <-------- |               | --------> | Manifest | <~~~~~~ | transports |
- | EMEManager | ~~~~~~~~> |     Init      | <~~~~~~~~ | Pipeline |         +------------+
+ | EMEManager | ~~~~~~~~> |     Init      | <~~~~~~~~ | fetcher  |         +------------+
  +------------+           |               |           +----------+         Abstract   ^ ~
  Negotiate content        |               |           Download the         the        | ~
  decryption               +---------------+           manifest             streaming  | ~
@@ -142,12 +142,12 @@ Buffers                          | ~                                            
 |                  (audio)   v ~  (video) V ~     (text) v ~     |                    | ~
 | Create the right +----------+   +----------+    +----------+   |  +--------------+  | ~
 | AdaptationBuffer |          |   |          |    |          |----> | SourceBuffer |  | ~
-| depending on the |  Period  |-+ |  Period  |-+  |  Period  |-+ |  |  Manager (1) |  | ~
+| depending on the |  Period  |-+ |  Period  |-+  |  Period  |-+ |  |   Store (1)  |  | ~
 | wanted track     |  Buffer  | | |  Buffer  | |  |  Buffer  | | |  +--------------+  | ~
-| (One per Period  |          | | |          | |  |          | | |  Create            | ~
-| and one per type +----------+ | +----------+ |  +----------+ | |  SourceBuffers     | ~
-| of media)         |           |  |           |   |           | |  (native and       | ~
-|                   +-----------+  +-----------+   +-----------+ |  custom)           | ~
+| (One per Period  |          | | |          | |  |          | | |  Create one        | ~
+| and one per type +----------+ | +----------+ |  +----------+ | |  SourceBuffer per  | ~
+| of media)         |           |  |           |   |           | |  type of media     | ~
+|                   +-----------+  +-----------+   +-----------+ |                    | ~
 |                          | ^            | ^            | ^     |                    | ~
 |                          | ~            | ~            | ~     |                    | ~
 |                          | ~            | ~            | ~     |                    | ~
@@ -159,7 +159,7 @@ Buffers                          | ~                                            
 | Buffer depending |  Buffer  | | |  Buffer  | |  |  Buffer  | | |  Find the best     | ~
 | on the current   |          | | |          | |  |          | | |  bitrate           | ~
 | network,         +----------+ | +----------+ |  +----------+ | |                    | ~
-| settings...).     |           |  |           |   |           | |                    | ~
+| settings...       |           |  |           |   |           | |                    | ~
 |                   +-----------+  +-----------+   +-----------+ |                    | ~
 |                          | ^            | ^            | ^     |                    | ~
 |                          | ~            | ~            | ~     |                    | ~
@@ -168,7 +168,7 @@ Buffers                          | ~                                            
 |                  (audio) v ~    (video) V ~     (text) v ~     |                    | ~
 |                  +----------+   +----------+    +----------+ ----> +------------+   | ~
 | (Representation- |          |   |          |    |          | <~~~~ |  Segment   | --+ ~
-| Buffer).         |Represe...|-+ |Represe...|-+  |Represe...|-+ |   |Pipeline (1)| <~~~+
+| Buffer).         |Represe...|-+ |Represe...|-+  |Represe...|-+ |   | fetcher (1)| <~~~+
 | Download and push|  Buffer  | | |  Buffer  | |  |  Buffer  | | |   +------------+
 | segments based on|          | | |          | |  |          | | |   Download media
 | the current      +----------+ | +----------+ |  +----------+ | |   segments
@@ -177,6 +177,6 @@ Buffers                          | ~                                            
 |                                                                |
 +----------------------------------------------------------------+
 
-(1) The SourceBuffer Manager, Segment Pipeline and ABRManager are actually created by the
+(1) The SourceBuffer Store, Segment fetcher and ABRManager are actually created by the
 Init and then used by the Buffers.
 ```

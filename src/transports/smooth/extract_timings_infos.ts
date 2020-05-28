@@ -20,6 +20,7 @@ import {
   getDurationFromTrun,
   getTRAF,
 } from "../../parsers/containers/isobmff";
+import isNullOrUndefined from "../../utils/is_null_or_undefined";
 import {
   IChunkTimingInfos,
   INextSegmentsInfos,
@@ -53,7 +54,7 @@ export default function extractTimingsInfos(
   let tfrfSegments : IISOBMFFBasicSegment[]|undefined;
   if (isLive) {
     const traf = getTRAF(data);
-    if (traf) {
+    if (traf !== null) {
       tfrfSegments = parseTfrf(traf);
       tfxdSegment = parseTfxd(traf);
     } else {
@@ -61,7 +62,7 @@ export default function extractTimingsInfos(
     }
   }
 
-  if (tfrfSegments) {
+  if (tfrfSegments !== undefined) {
     for (let i = 0; i < tfrfSegments.length; i++) {
       nextSegments.push({ time: tfrfSegments[i].time,
                           duration: tfrfSegments[i].duration,
@@ -69,7 +70,7 @@ export default function extractTimingsInfos(
     }
   }
 
-  if (tfxdSegment) {
+  if (tfxdSegment !== undefined) {
     chunkInfos = { time: tfxdSegment.time,
                    duration: tfxdSegment.duration,
                    timescale: segment.timescale };
@@ -87,7 +88,7 @@ export default function extractTimingsInfos(
                                       segment.duration / 4);
 
   const trunDuration = getDurationFromTrun(data);
-  if (trunDuration >= 0 && (segment.duration == null ||
+  if (trunDuration >= 0 && (isNullOrUndefined(segment.duration) ||
       Math.abs(trunDuration - segment.duration) <= maxDecodeTimeDelta)
   ) {
     chunkInfos = { time: segment.time,

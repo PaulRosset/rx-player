@@ -34,9 +34,83 @@ The fullscreen logic should now be entirely on the application-side. Replacement
 code is provided for each of those APIs below.
 
 
+
+<a name="bif-apis"></a>
+## Image (BIF) APIs ############################################################
+
+The following properties methods and events have been deprecated:
+  - the `imageTrackUpdate` event
+  - the `getImageTrackData` method
+  - the `supplementaryImageTracks` loadVideo option
+
+This is because most code linked to image management will be moved outside the
+RxPlayer. Doing that will both be more flexible for users and much easier to
+maintain for us (albeit with a small time of transition for the application).
+
+You can replace those API by this new exported function:
+[parseBifThumbnails](./parseBifThumbnails.md).
+
+To give more details about why those APIs have been deprecated, there are
+multiple reasons:
+  1. How it should be specified for live contents of for multi-Period DASH
+     contents is not clear enough.
+  2. Integrating it in the RxPlayer's API means that it had to take multiple
+     choices that we prefer to let to the application: whether to retry the
+     request if the it fails or if it is unavailable, whether to do the request
+     at all for users with a low bitrate...
+  3. The task of displaying those thumbnails is ultimately on the UI-side (the
+     part that know where the user wants to seek)
+  4. The biggest part of the code related to it was a simple BIF parser, that
+     can easily be re-implemented by any application.
+
+
 ## RxPlayer Methods ############################################################
 
 The following RxPlayer methods are deprecated.
+
+
+### getManifest ################################################################
+
+`getManifest` returns our internal representation we have of a given "manifest"
+document.
+
+Though it was first exposed to allow users to have access to more precize
+information on the current content, this method also limited us on the possible
+evolutions we could do, as changing what this function returns would mean
+breaking the API.
+
+We also realized that that method was not used for now by the implementation we
+know of.
+
+For now, we decided we will simply remove that API in the next major version. If
+that's a problem for you, please open an issue.
+
+
+### getCurrentAdaptations ######################################################
+
+`getCurrentAdaptations` returns an object describing each tracks available for
+the current Period in the current content.
+
+Like `getManifest`, we found that this API was not much used and limited us on
+the possible evolutions we can do on the RxPlayer.
+
+Again like `getManifest`, we plan to remove that API completely without
+replacing it.
+If that's a problem for you, please open an issue.
+
+
+### getCurrentRepresentations ##################################################
+
+`getCurrentRepresentations` returns an object describing each "qualities"
+available in the current chosen tracks.
+
+Exactly like `getCurrentAdaptations` and `getManifest`, we found that this API:
+  - was not used as far as we know
+  - limited the evolutions we could do on the RxPlayer's code without breaking
+    the API.
+
+We thus plan to remove that API completely without replacing it.
+If that's a problem for you, please open an issue.
 
 
 ### getNativeTextTrack #########################################################
@@ -152,6 +226,16 @@ function exitFullscreen() {
 ```
 
 
+### getImageTrackData ##########################################################
+
+`getImageTrackData` has been deprecated like most API related to BIF thumbnail
+parsing.
+You can read [the related chapter](#bif-apis) for more information.
+
+You can replace this API by using the
+[parseBifThumbnails](./parseBifThumbnails.md) tool.
+
+
 
 ## RxPlayer Events #############################################################
 
@@ -168,7 +252,7 @@ It should not be needed anymore as most advanced needs should be better answered
 by an ``html`` text track mode.
 
 
-## fullscreenChange ############################################################
+### fullscreenChange ###########################################################
 
 ``fullscreenChange`` events have been deprecated as it is part of our Fullscreen
 APIs, see [the related chapter](#fullscreen-apis) for more information.
@@ -192,6 +276,17 @@ mediaElement.addEventListener("fullscreenChange", () => {
 ```
 
 
+### imageTrackUpdate ###########################################################
+
+`imageTrackUpdate` events have been deprecated like most API related to BIF
+thumbnail parsing.
+You can read [the related chapter](#bif-apis) for more information.
+
+You can replace this API by using the
+[parseBifThumbnails](./parseBifThumbnails.md) tool.
+
+
+
 ## loadVideo options ###########################################################
 
 The following loadVideo options are deprecated.
@@ -206,7 +301,7 @@ This new option allows to handle much more complex use cases and can even be
 updated at any time through [the `setPreferredAudioTracks`
 method](./index.md#meth-setPreferredAudioTracks).
 
-#### How to replace that function
+#### How to replace that option
 
 It is very easy to replace `defaultAudioTrack` by `preferredAudioTracks`.
 
@@ -242,7 +337,7 @@ player.setPreferredAudioTracks([{ language: "fra", audioDescription: false }]);
 option](./loadVideo_options.md#prop-preferredTextTracks) for the same reason
 than `defaultAudioTrack`.
 
-#### How to replace that function
+#### How to replace that option
 
 It is very easy to replace `defaultTextTrack` by `preferredTextTracks`.
 
@@ -272,7 +367,80 @@ player.setPreferredTextTracks([{ language: "fra", closedCaption: false }]);
 ```
 
 
-## RxPlayer options
+### supplementaryTextTracks ####################################################
+
+The `supplementaryTextTracks` has been deprecated for multiple reasons:
+
+  1. The main reason is that the behavior of this API is not defined for
+     multi-Period DASH contents (nor for MetaPlaylist contents): Should we only
+     add the subtitles for the first Period or should it be for every Period?
+     How to define a different subtitles track for the first and for the second
+     Period?
+
+     Adding an external tool much less coupled to the RxPlayer move those
+     questions entirely to the application, which should know more than us what
+     to do in those different cases.
+
+  2. Its API was a little arcane because we had to make it compatible with every
+     possible type of contents (i.e. DASH, Smooth, MetaPlaylist etc.) out there.
+
+  3. It did not work for Directfile contents yet. Although we could have made it
+     compatible with them, we thought that this was the occasion to define a
+     better API to replace it.
+
+  4. Its behavior was more complex that you would initially think of. For
+     example, we could have to re-download multiple times the same subtitles
+     file if manual garbage collecting was enabled.
+
+  5. All usages of that API that we know of were for Smooth or DASH VoD contents
+     which sadly just omitted those subtitles tracks in their Manifest. The true
+     "clean" way to fix the problem in that case is to do it at the source: the
+     content.
+     In this case, fixing it on the player-side should only be a temporary
+     work-around (don't be scared, we still have an API replacement).
+
+
+The new `TextTrackRenderer` tool which replace it is much more straightforward.
+As an external tool which just reads and renders already-downloaded text
+subtitles, its API and the extent of what it does should be much more simple.
+
+It's also compatible with any type of contents, even when playing through an
+other player.
+
+#### How to replace that option
+
+Every `supplementaryTextTracks` feature can be replaced by the
+`TextTrackRenderer` tool.
+Please bear in mind however that they are two completely different APIs, doing
+the transition might take some time.
+
+The `TextTrackRenderer` tool is documented [here](./TextTrackRenderer.md).
+
+
+### supplementaryImageTracks ###################################################
+
+The `supplementaryImageTracks` events have been deprecated like most API related
+to BIF thumbnail parsing.
+You can read [the related chapter](#bif-apis) for more information.
+
+You can replace this API by using the
+[parseBifThumbnails](./parseBifThumbnails.md) tool.
+
+
+### hideNativeSubtitle #########################################################
+
+The `hideNativeSubtitle` option is deprecated and won't be replaced.
+
+This is because it was added at a time when our text track API was much less
+advanced. Some applications wanted to handle subtitles themselves and thus hid
+the true "native" subtitles to display them themselves in a better way.
+
+However, this API seems to not be used anymore. Please open an issue if you need
+it.
+
+
+
+## RxPlayer constructor options ################################################
 
 The following RxPlayer constructor options are deprecated.
 
@@ -314,7 +482,7 @@ replace:
 const manifest = player.getManifest();
 
 if (manifest && manifest.periods.length) {
-  console.log(manifest.adaptations === manifest.periods[0]); // true
+  console.log(manifest.adaptations === manifest.periods[0].adaptations); // true
 }
 ```
 

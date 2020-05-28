@@ -19,24 +19,26 @@
  * throw if something is wrong, and return a normalized option object.
  */
 
-import objectAssign from "object-assign";
 import config from "../../config";
 import log from "../../log";
 import { IRepresentationFilter } from "../../manifest";
 import {
   CustomManifestLoader,
   CustomSegmentLoader,
+  ITransportOptions as IParsedTransportOptions,
 } from "../../transports";
 import {
   normalizeAudioTrack,
   normalizeTextTrack,
 } from "../../utils/languages";
+import objectAssign from "../../utils/object_assign";
 import warnOnce from "../../utils/warn_once";
 import { IKeySystemOption } from "../eme";
 import {
   IAudioTrackPreference,
   ITextTrackPreference,
-} from "./track_manager";
+  IVideoTrackPreference,
+} from "./track_choice_manager";
 
 const { DEFAULT_AUTO_PLAY,
         DEFAULT_INITIAL_BITRATES,
@@ -54,53 +56,133 @@ const { DEFAULT_AUTO_PLAY,
 
 export { IKeySystemOption };
 
-interface IServerSyncInfos { serverTimestamp : number;
-                             clientTime : number; }
+/** Value of the `serverSyncInfos` transport option. */
+interface IServerSyncInfos {
+  /** The server timestamp at a given time. */
+  serverTimestamp : number;
+  /**
+   * The client monotonic clock (performance.now) at which `serverTimestamp`
+   * was valid.
+   */
+  clientTime : number;
+}
 
-export interface ITransportOptions { aggressiveMode? : boolean;
-                                     manifestLoader? : CustomManifestLoader;
-                                     segmentLoader? : CustomSegmentLoader;
-                                     representationFilter? : IRepresentationFilter;
-                                     referenceDateTime? : number;
-                                     serverSyncInfos? : IServerSyncInfos; }
+/** Value of the `transportOptions` option of the `loadVideo` method. */
+export interface ITransportOptions {
+  /** Whether we can perform request for segments in advance. */
+  aggressiveMode? : boolean;
+  /**
+   * Whether we should check that an obtain segment is truncated and retry the
+   * request if that's the case.
+   */
+  checkMediaSegmentIntegrity? : boolean;
+  /** Custom implementation for performing Manifest requests. */
+  manifestLoader? : CustomManifestLoader;
+  /** Possible custom URL pointing to a shorter form of the Manifest. */
+  manifestUpdateUrl? : string;
+  /** Minimum bound for Manifest updates, in milliseconds. */
+  minimumManifestUpdateInterval? : number;
+  /** Custom implementation for performing segment requests. */
+  segmentLoader? : CustomSegmentLoader;
+  /** Custom logic to filter out unwanted qualities. */
+  representationFilter? : IRepresentationFilter;
+  /** Base time for the segments in case it is not found in the Manifest. */
+  referenceDateTime? : number;
+  /** Allows to synchronize the server's time with the client's. */
+  serverSyncInfos? : IServerSyncInfos;
+}
 
-export interface ISupplementaryTextTrackOption { url : string;
-                                                 language : string;
-                                                 closedCaption : boolean;
-                                                 mimeType : string;
-                                                 codecs? : string; }
+/**
+ * External text track we have to add to the Manifest once downloaded.
+ * @deprecated
+ */
+export interface ISupplementaryTextTrackOption {
+  /** URL the external text track can be found at. */
+  url : string;
+  /** Language the text track is in. */
+  language : string;
+  /** If `true` the text track contains closed captions. */
+  closedCaption : boolean;
+  /** Mime-type used to know the container and/or format of the text track. */
+  mimeType : string;
+  /** Codec used to know the format of the text track. */
+  codecs? : string;
+}
 
-export interface ISupplementaryImageTrackOption { url : string;
-                                                  mimeType : string; }
+/**
+ * External image (".bif") track we have to add to the Manifest once downloaded.
+ * @deprecated
+ */
+export interface ISupplementaryImageTrackOption {
+  /** URL the external image track can be found at. */
+  url : string;
+  /** Mime-type used to know the format of the image track. */
+  mimeType : string;
+}
 
-export interface IDefaultAudioTrackOption { language : string;
-                                            normalized : string;
-                                            audioDescription : boolean; }
+/**
+ * Value for the `defaultAudioTrack` option of the `loadVideo` method.
+ * @deprecated
+ */
+export interface IDefaultAudioTrackOption {
+  /** The language wanted for the audio track. */
+  language : string;
+  /** The language normalized into ISO639-3 */
+  normalized : string;
+  /** If `true`, this is an audio description for the visually impaired. */
+  audioDescription : boolean;
+}
 
-export interface IDefaultTextTrackOption { language : string;
-                                           normalized : string;
-                                           closedCaption : boolean; }
+/**
+ * Value for the `defaultTextTrack` option of the `loadVideo` method.
+ * @deprecated
+ */
+export interface IDefaultTextTrackOption {
+  /** The language wanted for the text track. */
+  language : string;
+  /** The language normalized into ISO639-3 */
+  normalized : string;
+  /** If `true`, this is closed captions for the hard of hearing. */
+  closedCaption : boolean;
+}
 
-export type ITextTrackPreference = null |
-                                   { language : string;
-                                     closedCaption : boolean; };
+/** Value for the `networkConfig` option of the `loadVideo` method. */
+export interface INetworkConfigOption {
+  /**
+   * The amount of time maximum we should retry a Manifest or Manifest-related
+   * request before failing on Error.
+   * Set to `Infinity` for an infinite number of requests.
+   */
+  manifestRetry? : number;
+  /**
+   * The amount of time maximum we should retry a request in general when the
+   * user is offline.
+   * Set to `Infinity` for an infinite number of requests.
+   */
+  offlineRetry? : number;
+  /**
+   * The amount of time maximum we should retry a segment or segment-related
+   * request before failing on Error.
+   * Set to `Infinity` for an infinite number of requests.
+   */
+  segmentRetry? : number;
+}
 
-export interface INetworkConfigOption { manifestRetry? : number;
-                                        offlineRetry? : number;
-                                        segmentRetry? : number; }
-
+/** Possible values for the `startAt` option of the `loadVideo` method. */
 export type IStartAtOption = { position : number } |
                              { wallClockTime : Date|number } |
                              { percentage : number } |
                              { fromLastPosition : number } |
                              { fromFirstPosition : number };
 
+/** Value once parsed for the `startAt` option of the `loadVideo` method. */
 type IParsedStartAtOption = { position : number } |
                             { wallClockTime : number } |
                             { percentage : number } |
                             { fromLastPosition : number } |
                             { fromFirstPosition : number };
 
+/** Every options that can be given to the RxPlayer's constructor. */
 export interface IConstructorOptions { maxBufferAhead? : number;
                                        maxBufferBehind? : number;
                                        wantedBufferAhead? : number;
@@ -111,6 +193,7 @@ export interface IConstructorOptions { maxBufferAhead? : number;
 
                                        preferredAudioTracks? : IAudioTrackPreference[];
                                        preferredTextTracks? : ITextTrackPreference[];
+                                       preferredVideoTracks? : IVideoTrackPreference[];
 
                                        videoElement? : HTMLMediaElement;
                                        initialVideoBitrate? : number;
@@ -119,6 +202,7 @@ export interface IConstructorOptions { maxBufferAhead? : number;
                                        maxVideoBitrate? : number;
                                        stopAtEnd? : boolean; }
 
+/** Options of the RxPlayer's constructor once parsed. */
 export interface IParsedConstructorOptions {
   maxBufferAhead : number;
   maxBufferBehind : number;
@@ -130,6 +214,7 @@ export interface IParsedConstructorOptions {
 
   preferredAudioTracks : IAudioTrackPreference[];
   preferredTextTracks : ITextTrackPreference[];
+  preferredVideoTracks : IVideoTrackPreference[];
 
   videoElement : HTMLMediaElement;
   initialVideoBitrate : number;
@@ -139,6 +224,7 @@ export interface IParsedConstructorOptions {
   stopAtEnd : boolean;
 }
 
+/** Every options that can be given to the RxPlayer's `loadVideo` method. */
 export interface ILoadVideoOptions {
   transport : string;
 
@@ -146,10 +232,6 @@ export interface ILoadVideoOptions {
   autoPlay? : boolean;
   keySystems? : IKeySystemOption[];
   transportOptions? : ITransportOptions|undefined;
-  supplementaryTextTracks? : ISupplementaryTextTrackOption[];
-  supplementaryImageTracks? : ISupplementaryImageTrackOption[];
-  defaultAudioTrack? : IDefaultAudioTrackOption|null|undefined;
-  defaultTextTrack? : IDefaultTextTrackOption|null|undefined;
   lowLatencyMode? : boolean;
   networkConfig? : INetworkConfigOption;
   startAt? : IStartAtOption;
@@ -157,32 +239,55 @@ export interface ILoadVideoOptions {
   hideNativeSubtitle? : boolean;
   textTrackElement? : HTMLElement;
   manualBitrateSwitchingMode? : "seamless"|"direct";
+
+  /* tslint:disable deprecation */
+  supplementaryTextTracks? : ISupplementaryTextTrackOption[];
+  supplementaryImageTracks? : ISupplementaryImageTrackOption[];
+  defaultAudioTrack? : IDefaultAudioTrackOption|null|undefined;
+  defaultTextTrack? : IDefaultTextTrackOption|null|undefined;
+  /* tslint:enable deprecation */
 }
 
+/**
+ * Base type which the types for the parsed options of the RxPlayer's
+ * `loadVideo` method exend.
+ */
 interface IParsedLoadVideoOptionsBase {
   url? : string;
   transport : string;
   autoPlay : boolean;
   keySystems : IKeySystemOption[];
   lowLatencyMode : boolean;
+  manifestUpdateUrl : string | undefined;
+  minimumManifestUpdateInterval : number;
   networkConfig: INetworkConfigOption;
-  transportOptions : ITransportOptions;
-  supplementaryTextTracks : ISupplementaryTextTrackOption[];
-  supplementaryImageTracks : ISupplementaryImageTrackOption[];
+  transportOptions : IParsedTransportOptions;
   defaultAudioTrack : IAudioTrackPreference|null|undefined;
   defaultTextTrack : ITextTrackPreference|null|undefined;
   startAt : IParsedStartAtOption|undefined;
   manualBitrateSwitchingMode : "seamless"|"direct";
 }
 
+/**
+ * Options of the RxPlayer's `loadVideo` method once parsed when a "native"
+ * `textTrackMode` is asked.
+ */
 interface IParsedLoadVideoOptionsNative
           extends IParsedLoadVideoOptionsBase { textTrackMode : "native";
                                                 hideNativeSubtitle : boolean; }
 
+/**
+ * Options of the RxPlayer's `loadVideo` method once parsed when an "html"
+ * `textTrackMode` is asked.
+ */
 interface IParsedLoadVideoOptionsHTML
           extends IParsedLoadVideoOptionsBase { textTrackMode : "html";
                                                 textTrackElement : HTMLElement; }
 
+/**
+ * Type enumerating all possible forms for the parsed options of the RxPlayer's
+ * `loadVideo` method.
+ */
 export type IParsedLoadVideoOptions =
   IParsedLoadVideoOptionsNative |
   IParsedLoadVideoOptionsHTML;
@@ -209,6 +314,7 @@ function parseConstructorOptions(
 
   let preferredAudioTracks : IAudioTrackPreference[];
   let preferredTextTracks : ITextTrackPreference[];
+  let preferredVideoTracks : IVideoTrackPreference[];
 
   let videoElement : HTMLMediaElement;
   let initialVideoBitrate : number;
@@ -268,13 +374,38 @@ function parseConstructorOptions(
       !!options.throttleVideoBitrateWhenHidden;
   }
 
-  preferredAudioTracks = options.preferredAudioTracks == null ?
-    [] :
-    options.preferredAudioTracks;
+  if (options.preferredTextTracks !== undefined) {
+    if (!Array.isArray(options.preferredTextTracks)) {
+      warnOnce("Invalid `preferredTextTracks` option, it should be an Array");
+      preferredTextTracks = [];
+    } else {
+      preferredTextTracks = options.preferredTextTracks;
+    }
+  } else {
+    preferredTextTracks = [];
+  }
 
-  preferredTextTracks = options.preferredTextTracks == null ?
-    [] :
-    options.preferredTextTracks;
+  if (options.preferredAudioTracks !== undefined) {
+    if (!Array.isArray(options.preferredAudioTracks)) {
+      warnOnce("Invalid `preferredAudioTracks` option, it should be an Array");
+      preferredAudioTracks = [];
+    } else {
+      preferredAudioTracks = options.preferredAudioTracks;
+    }
+  } else {
+    preferredAudioTracks = [];
+  }
+
+  if (options.preferredVideoTracks !== undefined) {
+    if (!Array.isArray(options.preferredVideoTracks)) {
+      warnOnce("Invalid `preferredVideoTracks` option, it should be an Array");
+      preferredVideoTracks = [];
+    } else {
+      preferredVideoTracks = options.preferredVideoTracks;
+    }
+  } else {
+    preferredVideoTracks = [];
+  }
 
   if (options.videoElement == null) {
     videoElement = document.createElement("video");
@@ -338,6 +469,7 @@ function parseConstructorOptions(
            throttleVideoBitrateWhenHidden,
            preferredAudioTracks,
            preferredTextTracks,
+           preferredVideoTracks,
            initialAudioBitrate,
            initialVideoBitrate,
            maxAudioBitrate,
@@ -363,8 +495,6 @@ function parseLoadVideoOptions(
   let url : string|undefined;
   let transport : string;
   let keySystems : IKeySystemOption[];
-  let supplementaryTextTracks : ISupplementaryTextTrackOption[];
-  let supplementaryImageTracks : ISupplementaryImageTrackOption[];
   let textTrackMode : "native"|"html";
   let textTrackElement : HTMLElement|undefined;
   let startAt : IParsedStartAtOption|undefined;
@@ -406,19 +536,34 @@ function parseLoadVideoOptions(
     }
   }
 
-  const transportOptions = options.transportOptions || {};
+  const lowLatencyMode = options.lowLatencyMode === undefined ?
+    false :
+    !!options.lowLatencyMode;
+  const transportOptsArg = typeof options.transportOptions === "object" &&
+                                  options.transportOptions !== null ?
+    options.transportOptions :
+    {};
 
-  if (options.supplementaryTextTracks == null) {
-    supplementaryTextTracks = [];
-  } else {
-    supplementaryTextTracks =
+  const transportOptions : IParsedTransportOptions = {
+    aggressiveMode: transportOptsArg.aggressiveMode,
+    checkMediaSegmentIntegrity: transportOptsArg.checkMediaSegmentIntegrity,
+    lowLatencyMode,
+    manifestLoader: transportOptsArg.manifestLoader,
+    referenceDateTime: transportOptsArg.referenceDateTime,
+    representationFilter: transportOptsArg.representationFilter,
+    segmentLoader: transportOptsArg.segmentLoader,
+    serverSyncInfos: transportOptsArg.serverSyncInfos,
+    supplementaryImageTracks: [],
+    supplementaryTextTracks: [],
+  };
+  if (options.supplementaryTextTracks !== undefined) {
+    warnOnce("The `supplementaryTextTracks` loadVideo option is deprecated.\n" +
+             "Please use the `TextTrackRenderer` tool instead.");
+    const supplementaryTextTracks =
       Array.isArray(options.supplementaryTextTracks) ?
         options.supplementaryTextTracks : [options.supplementaryTextTracks];
 
     for (const supplementaryTextTrack of supplementaryTextTracks) {
-      if (typeof supplementaryTextTrack.closedCaption !== "boolean") {
-        supplementaryTextTrack.closedCaption = !!supplementaryTextTrack.closedCaption;
-      }
       if (typeof supplementaryTextTrack.language !== "string" ||
           typeof supplementaryTextTrack.mimeType !== "string" ||
           typeof supplementaryTextTrack.url !== "string"
@@ -427,12 +572,12 @@ function parseLoadVideoOptions(
                         "Missing either language, mimetype or url");
       }
     }
+    transportOptions.supplementaryTextTracks = supplementaryTextTracks;
   }
-
-  if (options.supplementaryImageTracks == null) {
-    supplementaryImageTracks = [];
-  } else {
-    supplementaryImageTracks =
+  if (options.supplementaryImageTracks !== undefined) {
+    warnOnce("The `supplementaryImageTracks` loadVideo option is deprecated.\n" +
+             "Please use the `parseBifThumbnails` tool instead.");
+    const supplementaryImageTracks =
       Array.isArray(options.supplementaryImageTracks) ?
         options.supplementaryImageTracks : [options.supplementaryImageTracks];
     for (const supplementaryImageTrack of supplementaryImageTracks) {
@@ -443,6 +588,7 @@ function parseLoadVideoOptions(
                         "Missing either mimetype or url");
       }
     }
+    transportOptions.supplementaryImageTracks = supplementaryImageTracks;
   }
 
   if (options.textTrackMode == null) {
@@ -467,13 +613,14 @@ function parseLoadVideoOptions(
              "`setPreferredTextTracks` method instead");
   }
   const defaultTextTrack = normalizeTextTrack(options.defaultTextTrack);
-  const lowLatencyMode = options.lowLatencyMode == null ? false :
-                                                          !!options.lowLatencyMode;
-  const hideNativeSubtitle = options.hideNativeSubtitle == null ?
-    !DEFAULT_SHOW_NATIVE_SUBTITLE :
-    !!options.hideNativeSubtitle;
+
+  let hideNativeSubtitle = !DEFAULT_SHOW_NATIVE_SUBTITLE;
+  if (options.hideNativeSubtitle != null) {
+    warnOnce("The `hideNativeSubtitle` loadVideo option is deprecated");
+    hideNativeSubtitle = !!options.hideNativeSubtitle;
+  }
   const manualBitrateSwitchingMode = options.manualBitrateSwitchingMode == null ?
-      !DEFAULT_MANUAL_BITRATE_SWITCHING_MODE :
+      DEFAULT_MANUAL_BITRATE_SWITCHING_MODE :
       options.manualBitrateSwitchingMode;
 
   if (textTrackMode === "html") {
@@ -506,6 +653,10 @@ function parseLoadVideoOptions(
     }
   }
 
+  const manifestUpdateUrl = options.transportOptions?.manifestUpdateUrl;
+  const minimumManifestUpdateInterval =
+    options.transportOptions?.minimumManifestUpdateInterval ?? 0;
+
   const networkConfig = options.networkConfig == null ?
     {} :
     { manifestRetry: options.networkConfig.manifestRetry,
@@ -521,10 +672,10 @@ function parseLoadVideoOptions(
            keySystems,
            lowLatencyMode,
            manualBitrateSwitchingMode,
+           manifestUpdateUrl,
+           minimumManifestUpdateInterval,
            networkConfig,
            startAt,
-           supplementaryImageTracks,
-           supplementaryTextTracks,
            textTrackElement,
            textTrackMode,
            transport,

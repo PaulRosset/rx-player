@@ -18,10 +18,7 @@ import config from "../../config";
 
 const { FORCED_ENDED_THRESHOLD } = config;
 
-/**
- * Player state dictionnary
- * @type {Object}
- */
+/** Player state dictionnary. */
 export const PLAYER_STATES = { STOPPED: "STOPPED",
                                LOADED: "LOADED",
                                LOADING: "LOADING",
@@ -53,7 +50,7 @@ export default function getLoadedContentState(
     return PLAYER_STATES.ENDED;
   }
 
-  if (stalledStatus) {
+  if (stalledStatus !== null) {
     // On some old browsers (e.g. Chrome 54), the browser does not
     // emit an 'ended' event in some conditions. Detect if we
     // reached the end by comparing the current position and the

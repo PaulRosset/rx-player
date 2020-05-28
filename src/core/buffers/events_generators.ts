@@ -36,9 +36,11 @@ import {
   IBufferWarningEvent,
   ICompletedBufferEvent,
   IEndOfStreamEvent,
+  INeedsDecipherabilityFlush,
   INeedsMediaSourceReload,
   IPeriodBufferClearedEvent,
   IPeriodBufferReadyEvent,
+  IProtectedSegmentEvent,
   IRepresentationChangeEvent,
   IResumeStreamEvent,
 } from "./types";
@@ -94,11 +96,11 @@ const EVENTS = {
   },
 
   discontinuityEncountered(
-    bufferType : IBufferType,
-    nextTime : number
+    gap : [number, number],
+    bufferType : IBufferType
   ) : IBufferNeedsDiscontinuitySeek {
     return { type : "discontinuity-encountered",
-             value : { bufferType, nextTime } };
+             value : { bufferType, gap } };
   },
 
   endOfStream() : IEndOfStreamEvent {
@@ -122,10 +124,24 @@ const EVENTS = {
   },
 
   needsMediaSourceReload(
-    { currentTime, isPaused } : { currentTime : number; isPaused : boolean}
+    period : Period,
+    { currentTime,
+      isPaused } : { currentTime : number;
+                     isPaused : boolean; }
   ) : INeedsMediaSourceReload {
     return { type: "needs-media-source-reload",
-             value: { currentTime, isPaused } };
+             value: { currentTime, isPaused, period } };
+  },
+
+  needsDecipherabilityFlush(
+    { currentTime,
+      isPaused,
+      duration } : { currentTime : number;
+                     isPaused : boolean;
+                     duration : number; }
+  ) : INeedsDecipherabilityFlush {
+    return { type: "needs-decipherability-flush",
+             value: { currentTime, isPaused, duration } };
   },
 
   periodBufferReady(
@@ -143,6 +159,13 @@ const EVENTS = {
   ) : IPeriodBufferClearedEvent {
     return { type: "periodBufferCleared",
              value: { type, period } };
+  },
+
+  protectedSegment(initDataInfo : { type : string;
+                                    data : Uint8Array; }
+  ) : IProtectedSegmentEvent {
+    return { type: "protected-segment",
+             value: initDataInfo };
   },
 
   representationChange(

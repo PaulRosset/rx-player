@@ -40,6 +40,7 @@ const AudioBitrateKnobBase = ({
   return (
     <Knob
       name="Audio Bitrate"
+      ariaLabel="Update the audio bitrate"
       className={className}
       disabled={options.length < 2}
       onChange={onAudioBitrateChange}
@@ -49,10 +50,10 @@ const AudioBitrateKnobBase = ({
   );
 };
 
-export default withModulesState({
+export default React.memo(withModulesState({
   player: {
     audioBitrateAuto: "audioBitrateAuto",
     audioBitrate: "audioBitrate",
     availableAudioBitrates: "availableAudioBitrates",
   },
-})(AudioBitrateKnobBase);
+})(AudioBitrateKnobBase));

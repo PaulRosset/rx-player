@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+import parseBaseURL, {
+  IBaseURL
+} from "./BaseURL";
 import {
   createPeriodIntermediateRepresentation,
   IPeriodIntermediateRepresentation,
@@ -25,15 +28,13 @@ import {
   parseScheme,
 } from "./utils";
 
-export interface IMPDIntermediateRepresentation {
-  children : IMPDChildren;
-  attributes : IMPDAttributes;
-}
+export interface IMPDIntermediateRepresentation { children : IMPDChildren;
+                                                  attributes : IMPDAttributes; }
 
 // intermediate representation for the root's children
 export interface IMPDChildren {
   // required
-  baseURL : string; // BaseURL for the contents. Empty string if not defined
+  baseURLs : IBaseURL[];
   locations : string[]; // Location(s) at which the Manifest can be refreshed
   periods : IPeriodIntermediateRepresentation[];
   utcTimings : IScheme[];
@@ -63,7 +64,7 @@ export interface IMPDAttributes {
  * @returns {Object}
  */
 function parseMPDChildren(mpdChildren : NodeList) : IMPDChildren {
-  let baseURL = "";
+  const baseURLs : IBaseURL[] = [];
   const locations : string[] = [];
   const periods : IPeriodIntermediateRepresentation[] = [];
   const utcTimings : IScheme[] = [];
@@ -74,11 +75,16 @@ function parseMPDChildren(mpdChildren : NodeList) : IMPDChildren {
       switch (currentNode.nodeName) {
 
         case "BaseURL":
-          baseURL = currentNode.textContent || "";
+          const baseURLObj = parseBaseURL(currentNode);
+          if (baseURLObj !== undefined) {
+            baseURLs.push(baseURLObj);
+          }
           break;
 
         case "Location":
-          locations.push(currentNode.textContent || "");
+          locations.push(currentNode.textContent === null ?
+                           "" :
+                           currentNode.textContent);
           break;
 
         case "Period":
@@ -95,7 +101,7 @@ function parseMPDChildren(mpdChildren : NodeList) : IMPDChildren {
     }
   }
 
-  return { baseURL, locations, periods, utcTimings };
+  return { baseURLs, locations, periods, utcTimings };
 }
 
 /**
@@ -118,13 +124,13 @@ function parseMPDAttributes(root : Element) : IMPDAttributes {
         res.type = attribute.value;
         break;
       case "availabilityStartTime":
-        res.availabilityStartTime = +parseDateTime(attribute.value);
+        res.availabilityStartTime = parseDateTime(attribute.value);
         break;
       case "availabilityEndTime":
-        res.availabilityEndTime = +parseDateTime(attribute.value);
+        res.availabilityEndTime = parseDateTime(attribute.value);
         break;
       case "publishTime":
-        res.publishTime = +parseDateTime(attribute.value);
+        res.publishTime = parseDateTime(attribute.value);
         break;
       case "mediaPresentationDuration":
         res.duration = parseDuration(attribute.value);
@@ -155,8 +161,6 @@ function parseMPDAttributes(root : Element) : IMPDAttributes {
 export function createMPDIntermediateRepresentation(
   root : Element
 ) : IMPDIntermediateRepresentation {
-  return {
-    children: parseMPDChildren(root.childNodes),
-    attributes: parseMPDAttributes(root),
-  };
+  return { children: parseMPDChildren(root.childNodes),
+           attributes: parseMPDAttributes(root) };
 }

@@ -46,10 +46,11 @@ function getWantedRepeatIndex(
  * @param {Object} index - index object, constructed by parsing the manifest.
  * @param {number} from - starting timestamp wanted, in seconds
  * @param {number} durationWanted - duration wanted, in seconds
+ * @param {number|undefined} maximumTime
  * @returns {Array.<Object>}
  */
 export default function getSegmentsFromTimeline(
-  index : { mediaURL : string;
+  index : { mediaURLs : string[] | null;
             startNumber? : number;
             timeline : IIndexSegment[];
             timescale : number;
@@ -60,16 +61,19 @@ export default function getSegmentsFromTimeline(
 ) : ISegment[] {
   const scaledUp = toIndexTime(from, index);
   const scaledTo = toIndexTime(from + durationWanted, index);
-  const { timeline, timescale, mediaURL, startNumber } = index;
+  const { timeline, timescale, mediaURLs, startNumber } = index;
 
-  let currentNumber = startNumber != null ? startNumber : undefined;
+  let currentNumber = startNumber != null ? startNumber :
+                                            undefined;
 
   const segments : ISegment[] = [];
 
   const timelineLength = timeline.length;
 
   // TODO(pierre): use @maxSegmentDuration if possible
-  let maxEncounteredDuration = (timeline.length && timeline[0].duration) || 0;
+  let maxEncounteredDuration = timeline.length > 0 &&
+                               timeline[0].duration != null ? timeline[0].duration :
+                                                               0;
 
   for (let i = 0; i < timelineLength; i++) {
     const timelineItem = timeline[i];
@@ -83,15 +87,17 @@ export default function getSegmentsFromTimeline(
     while (segmentTime < scaledTo && segmentNumberInCurrentRange <= repeat) {
       const segmentNumber = currentNumber != null ?
         currentNumber + segmentNumberInCurrentRange : undefined;
-      const segment = { id: "" + segmentTime,
+
+      const detokenizedURLs = mediaURLs?.map(url => {
+        return replaceSegmentDASHTokens(url, segmentTime, segmentNumber);
+      }) ?? null;
+      const segment = { id: String(segmentTime),
                         time: segmentTime - index.indexTimeOffset,
                         isInit: false,
                         range,
                         duration,
                         timescale,
-                        mediaURL: replaceSegmentDASHTokens(mediaURL,
-                                                           segmentTime,
-                                                           segmentNumber),
+                        mediaURLs: detokenizedURLs,
                         number: segmentNumber,
                         timestampOffset: -(index.indexTimeOffset / timescale) };
       segments.push(segment);

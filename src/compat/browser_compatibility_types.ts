@@ -15,7 +15,7 @@
  */
 
 import { MediaError } from "../errors";
-import shouldUseWebKitMediaKeys from "./should_use_webkit_media_keys";
+import isNode from "./is_node";
 
 // regular MediaKeys type + optional functions present in IE11
 interface ICompatMediaKeysConstructor {
@@ -86,24 +86,27 @@ export interface ICompatPictureInPictureWindow
   extends EventTarget { width: number;
                         height: number; }
 
-const win = window as any;
+const win = isNode ? {} :
+                     window as any;
+/* tslint:disable no-unsafe-any */
 const HTMLElement_ : typeof HTMLElement = win.HTMLElement;
-const VTTCue_ : ICompatVTTCueConstructor|undefined = win.VTTCue ||
-                                                     win.TextTrackCue;
+const VTTCue_ : ICompatVTTCueConstructor|undefined =
+  win.VTTCue != null ? win.VTTCue :
+                       win.TextTrackCue;
+/* tslint:enable no-unsafe-any */
 
-const MediaSource_ : typeof MediaSource|undefined = win.MediaSource ||
-                                                    win.MozMediaSource ||
-                                                    win.WebKitMediaSource ||
-                                                    win.MSMediaSource;
+/* tslint:disable no-unsafe-any */
+const MediaSource_ : typeof MediaSource|undefined =
+  win.MediaSource != null ? win.MediaSource :
+  win.MozMediaSource != null ? win.MozMediaSource :
+  win.WebKitMediaSource != null ? win.WebKitMediaSource :
+                                  win.MSMediaSource;
+/* tslint:enable no-unsafe-any */
 
-const MediaKeys_ : ICompatMediaKeysConstructor|undefined = (() => {
-  if (shouldUseWebKitMediaKeys()) {
-    return win.WebKitMediaKeys;
-  }
-  return win.MediaKeys ||
-         win.MSMediaKeys ||
-         win.MozMediaKeys ||
-         win.WebKitMediaKeys ||
+const MediaKeys_ : ICompatMediaKeysConstructor = (() => {
+  /* tslint:disable no-unsafe-any */
+  return win.MediaKeys != null ? win.MediaKeys :
+         win.MozMediaKeys != null ? win.MozMediaKeys :
          class {
            public readonly create : () => never;
            public readonly isTypeSupported : () => never;
@@ -121,6 +124,7 @@ const MediaKeys_ : ICompatMediaKeysConstructor|undefined = (() => {
              this.setServerCertificate = noMediaKeys;
            }
          };
+  /* tslint:enable no-unsafe-any */
 })();
 
 const READY_STATES = { HAVE_NOTHING: 0,
@@ -128,6 +132,13 @@ const READY_STATES = { HAVE_NOTHING: 0,
                        HAVE_CURRENT_DATA: 2,
                        HAVE_FUTURE_DATA: 3,
                        HAVE_ENOUGH_DATA: 4 };
+
+// TODO w3c defines onremovetrack and onchange attributes which are not present on
+// ts type definition
+export interface ICompatTextTrackList extends TextTrackList {
+  onremovetrack: ((ev: TrackEvent) => void) | null;
+  onchange: (() => void) | null;
+}
 
 export {
   HTMLElement_,

@@ -19,6 +19,7 @@ import {
   Observer,
   of as observableOf,
 } from "rxjs";
+import { tap } from "rxjs/operators";
 import xhr, {
   fetchIsSupported,
 } from "../../utils/request";
@@ -30,8 +31,9 @@ import {
   ISegmentLoaderObservable,
 } from "../types";
 import byteRange from "../utils/byte_range";
+import checkISOBMFFIntegrity from "../utils/check_isobmff_integrity";
+import isWEBMEmbeddedTrack from "../utils/is_webm_embedded_track";
 import initSegmentLoader from "./init_segment_loader";
-import isWEBMEmbeddedTrack from "./is_webm_embedded_track";
 import lowLatencySegmentLoader from "./low_latency_segment_loader";
 
 type ICustomSegmentLoaderObserver =
@@ -66,8 +68,9 @@ function regularSegmentLoader(
   return xhr({ url,
                responseType: "arraybuffer",
                sendProgressEvents: true,
-               headers: segment.range != null ? { Range: byteRange(segment.range) } :
-                                                undefined });
+               headers: segment.range !== undefined ?
+                 { Range: byteRange(segment.range) } :
+                 undefined });
 }
 
 /**
@@ -79,26 +82,42 @@ function regularSegmentLoader(
  * @returns {Function}
  */
 export default function generateSegmentLoader(
-  lowLatencyMode: boolean,
-  customSegmentLoader? : CustomSegmentLoader
+  { lowLatencyMode,
+    segmentLoader: customSegmentLoader,
+    checkMediaSegmentIntegrity } : { lowLatencyMode: boolean;
+                                     segmentLoader? : CustomSegmentLoader;
+                                     checkMediaSegmentIntegrity? : boolean; }
 ) : (x : ISegmentLoaderArguments) => ISegmentLoaderObservable< Uint8Array |
                                                                ArrayBuffer |
                                                                null > {
+  if (checkMediaSegmentIntegrity !== true) {
+    return segmentLoader;
+  }
+  return (content) => segmentLoader(content).pipe(tap(res => {
+    if ((res.type === "data-loaded" || res.type === "data-chunk") &&
+        res.value.responseData !== null &&
+        !isWEBMEmbeddedTrack(content.representation))
+    {
+      checkISOBMFFIntegrity(new Uint8Array(res.value.responseData),
+                            content.segment.isInit);
+    }
+  }));
+
   /**
    * @param {Object} content
    * @returns {Observable}
    */
-  return function segmentLoader(
+  function segmentLoader(
     content : ISegmentLoaderArguments
   ) : ISegmentLoaderObservable< Uint8Array | ArrayBuffer | null > {
-    const { mediaURL } = content.segment;
-    if (mediaURL == null) {
+    const { url } = content;
+    if (url == null) {
       return observableOf({ type: "data-created" as const,
                             value: { responseData: null } });
     }
 
-    if (lowLatencyMode || customSegmentLoader == null) {
-      return regularSegmentLoader(mediaURL, content, lowLatencyMode);
+    if (lowLatencyMode || customSegmentLoader === undefined) {
+      return regularSegmentLoader(url, content, lowLatencyMode);
     }
 
     const args = { adaptation: content.adaptation,
@@ -107,7 +126,7 @@ export default function generateSegmentLoader(
                    representation: content.representation,
                    segment: content.segment,
                    transport: "dash",
-                   url: mediaURL };
+                   url };
 
     return new Observable((obs : ICustomSegmentLoaderObserver) => {
       let hasFinished = false;
@@ -117,11 +136,11 @@ export default function generateSegmentLoader(
        * Callback triggered when the custom segment loader has a response.
        * @param {Object} args
        */
-      const resolve = (_args : {
-        data : ArrayBuffer|Uint8Array;
-        size? : number;
-        duration? : number;
-      }) => {
+      const resolve = (
+        _args : { data : ArrayBuffer|Uint8Array;
+                  size? : number;
+                  duration? : number; }
+      ) => {
         if (!hasFallbacked) {
           hasFinished = true;
           obs.next({ type: "data-loaded" as const,
@@ -143,13 +162,25 @@ export default function generateSegmentLoader(
         }
       };
 
+      const progress = (
+        _args : { duration : number;
+                  size : number;
+                  totalSize? : number; }
+      ) => {
+        if (!hasFallbacked) {
+          obs.next({ type: "progress", value: { duration: _args.duration,
+                                                size: _args.size,
+                                                totalSize: _args.totalSize } });
+        }
+      };
+
       /**
        * Callback triggered when the custom segment loader wants to fallback to
        * the "regular" implementation
        */
       const fallback = () => {
         hasFallbacked = true;
-        const regular$ = regularSegmentLoader(mediaURL, content, lowLatencyMode);
+        const regular$ = regularSegmentLoader(url, content, lowLatencyMode);
 
         // HACK What is TypeScript/RxJS doing here??????
         /* tslint:disable deprecation */
@@ -158,7 +189,7 @@ export default function generateSegmentLoader(
         /* tslint:enable deprecation */
       };
 
-      const callbacks = { reject, resolve, fallback };
+      const callbacks = { reject, resolve, progress, fallback };
       const abort = customSegmentLoader(args, callbacks);
 
       return () => {
@@ -167,5 +198,5 @@ export default function generateSegmentLoader(
         }
       };
     });
-  };
+  }
 }

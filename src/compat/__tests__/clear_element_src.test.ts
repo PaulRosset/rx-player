@@ -16,6 +16,7 @@
 
 import arrayFindIndex from "../../utils/array_find_index";
 
+/* tslint:disable no-unsafe-any */
 describe("Compat - clearElementSrc", () => {
   beforeEach(() => {
     jest.resetModules();
@@ -152,7 +153,7 @@ describe("Compat - clearElementSrc", () => {
     expect(spyRemoveChild).toHaveBeenCalledTimes(2);
     expect(mockLogWarn).toHaveBeenCalledTimes(2);
     expect(mockLogWarn)
-      .toHaveBeenCalledWith("Could not remove text track child from element.");
+      .toHaveBeenCalledWith("Compat: Could not remove text track child from element.");
   });
 
   it("should not remove audio child node if on firefox and no text tracks", () => {
@@ -217,3 +218,4 @@ describe("Compat - clearElementSrc", () => {
     expect(spyRemoveChild).not.toHaveBeenCalled();
   });
 });
+/* tslint:enable no-unsafe-any */

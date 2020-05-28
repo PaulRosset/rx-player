@@ -19,25 +19,31 @@ const VideoTrackKnobBase = ({
     options = ["Not available"];
     selectedIndex = 0;
   } else {
-    options = availableVideoTracks
-      .map((track, i) => `track ${i}: ${track.id}`);
+    options = ["no video track"].concat(
+      availableVideoTracks.map((track, i) => `track ${i}: ${track.id}`),
+    );
 
     selectedIndex = currentVideoTrack ?
-      Math.max(findVideoTrackIndex(currentVideoTrack, availableVideoTracks), 0)
+      Math.max(findVideoTrackIndex(currentVideoTrack, availableVideoTracks), 1)
       : 0;
   }
 
   const onTrackChange = (evt) => {
     const index = +evt.target.value;
-    const track = availableVideoTracks[index];
-    player.dispatch("SET_VIDEO_TRACK", track);
+    if (index === 0) {
+      player.dispatch("DISABLE_VIDEO_TRACK");
+    } else {
+      const track = availableVideoTracks[index - 1];
+      player.dispatch("SET_VIDEO_TRACK", track);
+    }
   };
 
   return (
     <Knob
       name="Video Track"
+      ariaLabel="Update the video track"
       className={className}
-      disabled={availableVideoTracks.length < 2}
+      disabled={options.length <= 1}
       onChange={onTrackChange}
       options={options}
       selected={selectedIndex}
@@ -45,9 +51,9 @@ const VideoTrackKnobBase = ({
   );
 };
 
-export default withModulesState({
+export default React.memo(withModulesState({
   player: {
     videoTrack: "currentVideoTrack",
     availableVideoTracks: "availableVideoTracks",
   },
-})(VideoTrackKnobBase);
+})(VideoTrackKnobBase));

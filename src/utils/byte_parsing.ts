@@ -27,6 +27,22 @@ type TypedArray = Int8Array |
                   Float64Array;
 
 /**
+ * Convert a string to an Uint16Array containing the corresponding
+ * UTF-16 code units.
+ * @param {string} string
+ * @returns {Uint16Array}
+ */
+function strToUTF16Array(string: string): Uint16Array {
+  const buffer = new ArrayBuffer(string.length * 2);
+  const array = new Uint16Array(buffer);
+  for (let i = 0, strLen = string.length; i < strLen; i += 1) {
+    array[i] = string.charCodeAt(i);
+  }
+
+  return array;
+}
+
+/**
  * Convert a simple string to an Uint8Array containing the corresponding
  * UTF-8 code units.
  * /!\ its implementation favors simplicity and performance over accuracy.
@@ -52,7 +68,7 @@ function strToBytes(str : string) : Uint8Array {
  */
 function bytesToStr(bytes : TypedArray) : string {
   // NOTE: ugly I know, but TS is problematic here (you can try)
-  return (String.fromCharCode as any).apply(null, bytes);
+  return String.fromCharCode.apply(null, bytes as unknown as number[]);
 }
 
 /**
@@ -97,7 +113,7 @@ function bytesToHex(bytes : Uint8Array, sep : string = "") : string {
   for (let i = 0; i < bytes.byteLength; i++) {
     hex += (bytes[i] >>> 4).toString(16);
     hex += (bytes[i] & 0xF).toString(16);
-    if (sep.length && i < bytes.byteLength - 1) {
+    if (sep.length > 0 && i < bytes.byteLength - 1) {
       hex += sep;
     }
   }
@@ -333,8 +349,28 @@ function guidToUuid(uuid : string) : string {
   return bytesToHex(ord);
 }
 
+/**
+ * Check if an ArrayBuffer is equal to the bytes given.
+ * @param {ArrayBuffer} buffer
+ * @param {Uint8Array} bytes
+ * @returns {Boolean}
+ */
+function isABEqualBytes(buffer : ArrayBuffer, bytes : Uint8Array) : boolean {
+  const view = new DataView(buffer);
+  const len = view.byteLength;
+  if (len !== bytes.length) {
+    return false;
+  }
+  for (let i = 0; i < len; i++) {
+    if (view.getUint8(i) !== bytes[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export {
-  strToBytes,
+  strToBytes, strToUTF16Array,
   bytesToStr, bytesToUTF16Str,
   hexToBytes,
   bytesToHex,
@@ -344,4 +380,5 @@ export {
   itobe2, itobe4, itobe8,
   itole2, itole4,
   guidToUuid,
+  isABEqualBytes,
 };

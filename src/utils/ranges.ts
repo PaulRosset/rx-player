@@ -115,6 +115,22 @@ function isBefore(range1 : IRange, range2 : IRange) : boolean {
 }
 
 /**
+ * Returns true if the time given can be considered as part of any of the given
+ * ranges.
+ * @param {Array.<Object>} ranges
+ * @param {number} time
+ * @returns {boolean}
+ */
+function isTimeInRanges(ranges : IRange[], time : number) : boolean {
+  for (let i = 0; i < ranges.length; i++) {
+    if (isTimeInRange(ranges[i], time)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Returns true if the time given can be considered as part of the given range.
  * @param {Object} range1
  * @param {Number} Time
@@ -235,8 +251,8 @@ function getSizeOfRange(
   currentTime : number
 ) : number {
   const range = getRange(timeRanges, currentTime);
-  return range ? range.end - range.start :
-                 0;
+  return range !== null ? range.end - range.start :
+                          0;
 }
 
 /**
@@ -251,8 +267,8 @@ function getPlayedSizeOfRange(
   currentTime : number
 ) : number {
   const range = getRange(timeRanges, currentTime);
-  return range ? currentTime - range.start :
-                 0;
+  return range !== null ? currentTime - range.start :
+                          0;
 }
 
 /**
@@ -267,8 +283,8 @@ function getLeftSizeOfRange(
   currentTime : number
 ) : number {
   const range = getRange(timeRanges, currentTime);
-  return range ? range.end - currentTime :
-                 Infinity;
+  return range !== null ? range.end - currentTime :
+                          Infinity;
 }
 
 /**
@@ -365,7 +381,7 @@ function keepRangeIntersection(
   for (let i = 0; i < ranges1.length; i++) {
     const range = ranges1[i];
     const overlappingRanges = findOverlappingRanges(range, ranges2);
-    if (overlappingRanges.length) {
+    if (overlappingRanges.length > 0) {
       for (let j = 0; j < overlappingRanges.length; j++) {
         const overlappingRange = overlappingRanges[j];
         result.push({ start: Math.max(range.start, overlappingRange.start),
@@ -376,8 +392,74 @@ function keepRangeIntersection(
   return result;
 }
 
+/**
+ * Exclude from the `baseRanges` everything that is in `rangesToExclude`.
+ * Example:
+ *
+ * Let's say we have the following base ranges:
+ *       |==========|        |===============| |======|    |==========|
+ *
+ * From which we want to "exclude" the following ranges:
+ *          |=========| |==|        |===|  |=====|
+ *
+ * We will obtain the first ranges from which we remove the second ranges:
+ * -----------------------------------------------------------------------
+ *       |==========|        |===============| |======|    |==========|
+ *          |=========| |==|        |===|  |=====|
+ * _______________________________________________________________________
+ *                                     |
+ *                                     |
+ *                                     V
+ * -----------------------------------------------------------------------
+ *       |==|                |======|   |==|     |====|    |==========|
+ * -----------------------------------------------------------------------
+ *
+ * @param {Array.<Object} baseRanges
+ * @param {Array.<Object} rangesToExclude
+ * @return {Array.<Object>}
+ */
+function excludeFromRanges(
+  baseRanges : IRange[],
+  rangesToExclude : IRange[]
+) : IRange[] {
+  const result : IRange[] = [];
+
+  // For every range in `baseRanges`, find overlapping ranges with
+  // `rangesToExclude` and remove them.
+  for (let i = 0; i < baseRanges.length; i++) {
+    const range = baseRanges[i];
+    const intersections : IRange[] = [];
+    const overlappingRanges = findOverlappingRanges(range, rangesToExclude);
+    if (overlappingRanges.length > 0) {
+      for (let j = 0; j < overlappingRanges.length; j++) {
+        const overlappingRange = overlappingRanges[j];
+        intersections.push({ start: Math.max(range.start, overlappingRange.start),
+                             end: Math.min(range.end, overlappingRange.end) });
+      }
+    }
+    if (intersections.length === 0) {
+      result.push(range);
+    } else {
+      let lastStart : number = range.start;
+      for (let j = 0; j < intersections.length; j++) {
+        if (intersections[j].start > lastStart) {
+          result.push({ start: lastStart,
+                        end: intersections[j].start });
+        }
+        lastStart = intersections[j].end;
+      }
+      if (lastStart < range.end) {
+        result.push({ start: lastStart,
+                      end: range.end });
+      }
+    }
+  }
+  return result;
+}
+
 export {
   convertToRanges,
+  excludeFromRanges,
   getInnerAndOuterTimeRanges,
   getLeftSizeOfRange,
   getNextRangeGap,
@@ -385,9 +467,11 @@ export {
   getRange,
   getSizeOfRange,
   insertInto,
+  IRange,
   isAfter,
   isBefore,
   isTimeInRange,
+  isTimeInRanges,
   keepRangeIntersection,
   mergeContiguousRanges,
   removeEmptyRanges,

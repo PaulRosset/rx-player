@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
+import isNonEmptyString from "../is_non_empty_string";
+import isNullOrUndefined from "../is_null_or_undefined";
 import ISO_MAP_1_TO_3 from "./ISO_639-1_to_ISO_639-3";
 import ISO_MAP_2_TO_3 from "./ISO_639-2_to_ISO_639-3";
 
 interface IMinimalAudioTrackObject { language: string;
+                                     isDub? : boolean;
                                      audioDescription?: boolean; }
 
 interface IMinimalTextTrackObject { language: string;
@@ -25,6 +28,7 @@ interface IMinimalTextTrackObject { language: string;
 
 interface INormalizedAudioTrackObject
           extends IMinimalAudioTrackObject { normalized: string;
+                                             isDub? : boolean;
                                              audioDescription : boolean; }
 
 interface INormalizedTextTrackObject
@@ -40,13 +44,13 @@ interface INormalizedTextTrackObject
  * @returns {string}
  */
 function normalizeLanguage(_language : string) : string {
-  if (_language == null || _language === "") {
+  if (isNullOrUndefined(_language) || _language === "") {
     return "";
   }
   const fields = ("" + _language).toLowerCase().split("-");
   const base = fields[0];
   const normalizedBase = normalizeBase(base);
-  if (normalizedBase) {
+  if (isNonEmptyString(normalizedBase)) {
     return normalizedBase;
   }
   return _language;
@@ -84,15 +88,16 @@ function normalizeBase(base : string) : string|undefined {
 function normalizeTextTrack(
   _language : string|IMinimalTextTrackObject|null|undefined
 ) : INormalizedTextTrackObject|null|undefined {
-  if (_language != null) {
+  if (!isNullOrUndefined(_language)) {
     let language;
-    let closedCaption;
+    let closedCaption = false;
     if (typeof _language === "string") {
       language = _language;
-      closedCaption = false;
     } else {
       language = _language.language;
-      closedCaption = !!_language.closedCaption;
+      if (_language.closedCaption === true) {
+        closedCaption = true;
+      }
     }
 
     return { language,
@@ -105,34 +110,35 @@ function normalizeTextTrack(
 
 /**
  * Normalize audio track from a user given input into an object
- * with three properties:
+ * with the following properties:
  *   - language {string}: The language the user gave us
  *   - normalized {string}: An attempt to normalize the language into an
  *     ISO 639-3 code
  *   - audioDescription {Boolean}: Whether the track is a closed caption track
+ *   - isDub {Boolean|undefined}: if true, this is a dub.
  * @param {Object|string|null|undefined} _language
  * @returns {Object|null|undefined}
  */
 function normalizeAudioTrack(
   _language : string|IMinimalAudioTrackObject|null|undefined
 ) : INormalizedAudioTrackObject|null|undefined {
-  if (_language != null) {
-    let language;
-    let audioDescription;
-    if (typeof _language === "string") {
-      language = _language;
-      audioDescription = false;
-    } else {
-      language = _language.language;
-      audioDescription = !!_language.audioDescription;
-    }
-
-    return { language,
-             audioDescription,
-             normalized: normalizeLanguage(language) };
+  if (isNullOrUndefined(_language)) {
+    return _language;
   }
-
-  return _language;
+  if (typeof _language === "string") {
+    return { language: _language,
+             audioDescription: false,
+             normalized: normalizeLanguage(_language) };
+  }
+  const normalized : INormalizedAudioTrackObject = {
+    language: _language.language,
+    audioDescription: _language.audioDescription === true,
+    normalized: normalizeLanguage(normalizeLanguage(_language.language)),
+  };
+  if (_language.isDub === true) {
+    normalized.isDub = true;
+  }
+  return normalized;
 }
 
 export default normalizeLanguage;

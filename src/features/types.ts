@@ -16,6 +16,7 @@
 
 import { Observable } from "rxjs";
 import { ICustomSourceBuffer } from "../compat";
+import MediaElementTrackChoiceManager from "../core/api/media_element_track_choice_manager";
 import {
   IEMEManagerEvent,
   IKeySystemOption,
@@ -33,8 +34,12 @@ import { ITransportFunction } from "../transports";
 export type IDirectFileInit = (args : IDirectFileOptions) =>
                                 Observable<IDirectfileEvent>;
 
+interface IContentProtection { type : string;
+                               data : Uint8Array; }
+
 export type IEMEManager = (mediaElement : HTMLMediaElement,
-                           keySystems: IKeySystemOption[]) =>
+                           keySystems: IKeySystemOption[],
+                           contentProtections$ : Observable<IContentProtection>) =>
                              Observable<IEMEManagerEvent>;
 
 export type INativeTextTracksBuffer =
@@ -44,6 +49,8 @@ export type INativeTextTracksBuffer =
 export type IHTMLTextTracksBuffer =
   new(mediaElement : HTMLMediaElement,
       textTrackElement: HTMLElement) => ICustomSourceBuffer<unknown>;
+
+export type IMediaElementTrackChoiceManager = typeof MediaElementTrackChoiceManager;
 
 interface IBifThumbnail { index : number;
                           duration : number;
@@ -77,15 +84,17 @@ export type IImageParser =
 // interface of the global `features` object through which features are
 // accessed.
 export interface IFeaturesObject {
-  transports : Partial<Record<string, ITransportFunction>>;
-  imageBuffer : IImageBuffer|null;
-  imageParser : IImageParser|null;
-  nativeTextTracksBuffer : INativeTextTracksBuffer|null;
-  nativeTextTracksParsers : Partial<Record<string, INativeTextTracksParserFn>>;
+  directfile : { initDirectFile: IDirectFileInit;
+                 mediaElementTrackChoiceManager : IMediaElementTrackChoiceManager; } |
+               null;
+  emeManager : IEMEManager|null;
   htmlTextTracksBuffer : IHTMLTextTracksBuffer|null;
   htmlTextTracksParsers : Partial<Record<string, IHTMLTextTracksParserFn>>;
-  emeManager : IEMEManager|null;
-  directfile : IDirectFileInit|null;
+  imageBuffer : IImageBuffer|null;
+  imageParser : IImageParser|null;
+  transports : Partial<Record<string, ITransportFunction>>;
+  nativeTextTracksBuffer : INativeTextTracksBuffer|null;
+  nativeTextTracksParsers : Partial<Record<string, INativeTextTracksParserFn>>;
 }
 
 export type IFeatureFunction = (features : IFeaturesObject) => void;

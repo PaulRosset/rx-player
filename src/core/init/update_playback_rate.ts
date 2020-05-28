@@ -20,9 +20,8 @@ import {
   of as observableOf,
 } from "rxjs";
 import {
-  filter,
+  distinctUntilChanged,
   map,
-  pairwise,
   startWith,
   switchMap,
   tap,
@@ -39,7 +38,7 @@ export interface IPlaybackRateOptions { pauseWhenStalled? : boolean; }
  *
  * @param {HTMLMediaElement} mediaElement
  * @param {Observable} speed$ - emit speed set by the user
- * @param {Observable} clock$
+ * @param {Observable} clock$ - Current playback conditions
  * @param {Object} options - Contains the following properties:
  *   - pauseWhenStalled {Boolean|undefined} - true if the player
  *     stalling should lead to a pause until it un-stalls. True by default.
@@ -56,22 +55,11 @@ export default function updatePlaybackRate(
   if (!pauseWhenStalled) {
     forcePause$ = observableOf(false);
   } else {
-    const lastTwoTicks$ : Observable<[IInitClockTick, IInitClockTick]> =
-      clock$.pipe(pairwise());
-
-    forcePause$ = lastTwoTicks$
+    forcePause$ = clock$
       .pipe(
-        map(([prevTiming, timing]) => {
-          const isStalled = timing.stalled;
-          const wasStalled = prevTiming.stalled;
-          if (!wasStalled !== !isStalled || // xor
-              (wasStalled && isStalled && wasStalled.reason !== isStalled.reason)
-          ) {
-            return !wasStalled;
-          }
-        }),
-        filter((val : boolean|undefined) : val is boolean => val != null),
-        startWith(false)
+        map((timing) => timing.stalled !== null),
+        startWith(false),
+        distinctUntilChanged()
       );
   }
 

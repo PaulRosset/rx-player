@@ -40,6 +40,7 @@ const VideoBitrateKnobBase = ({
   return (
     <Knob
       name="Video Bitrate"
+      ariaLabel="Update the video bitrate"
       className={className}
       disabled={availableVideoBitrates.length < 2}
       onChange={onVideoBitrateChange}
@@ -49,10 +50,10 @@ const VideoBitrateKnobBase = ({
   );
 };
 
-export default withModulesState({
+export default React.memo(withModulesState({
   player: {
     videoBitrateAuto: "videoBitrateAuto",
     videoBitrate: "videoBitrate",
     availableVideoBitrates: "availableVideoBitrates",
   },
-})(VideoBitrateKnobBase);
+})(VideoBitrateKnobBase));

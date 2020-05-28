@@ -10,7 +10,7 @@
 </li>
 <li><a href="#chapter-Building%20with%20environment%20variables">Building with environment variables</a>
 <ul>
-<li><a href="#subchapter-How%20it%20works">How it works</a></li>
+<li><a href="#subchapter-How%20it%20works-bis">How it works</a></li>
 <li><a href="#subchapter-List%20of%20environment%20variables">List of environment variables</a></li>
 </ul>
 </li>
@@ -181,6 +181,10 @@ are all objects declared in upper-case.</p>
 <td>Parse BIF image tracks for the image buffer</td>
 </tr>
 <tr>
+<td><code>LOCAL_MANIFEST</code> [5]</td>
+<td>Enable playback of &#x201C;local&#x201D; contents</td>
+</tr>
+<tr>
 <td><code>METAPLAYLIST</code> [5]</td>
 <td>Enable playback of &#x201C;metaplaylist&#x201D; contents</td>
 </tr>
@@ -197,6 +201,8 @@ feature.</p>
 <p><strong>[3]</strong>: Those features will only be used if <code>HTML_TEXT_BUFFER</code> is an added
 feature.</p>
 <p><strong>[4]</strong>: This feature will only be used if <code>IMAGE_BUFFER</code> is an added feature.</p>
+<p><strong>[5]</strong>: Those type of contents are experimental. They should be imported
+from <code>rx-player/experimental/features</code>.</p>
 <hr>
 <p><a name="subchapter-Examples"></a></p>
 <h3>Examples</h3>
@@ -242,7 +248,7 @@ RxPlayer.addFeatures([ SMOOTH, IMAGE_BUFFER, BIF_PARSER ]);
 </code></pre>
 <p><a name="chapter-Building%20with%20environment%20variables"></a></p>
 <h2>Building with environment variables</h2>
-<p><a name="subchapter-How%20it%20works"></a></p>
+<p><a name="subchapter-How%20it%20works-bis"></a></p>
 <h3>How it works</h3>
 <p>You can also include only the features you need on the RxPlayer library by
 building it while having specific environment variables.</p>
@@ -268,6 +274,11 @@ ignored during a build.</p>
 <h4>RXP_DIRECTFILE</h4>
 <p>True by default. If set to &#x201C;false&#x201D;, all code relative to directfile streaming
 will be ignored during a build.</p>
+<p><a name="env-local"></a></p>
+<h4>RXP_LOCAL_MANIFEST</h4>
+<p>False by default. If set to &#x201C;true&#x201D;, all code relative to the &#x201C;local&#x201D; transport
+(to be able to play content offline for example) will be included during a
+build.</p>
 <p><a name="env-metaplaylist"></a></p>
 <h4>RXP_METAPLAYLIST</h4>
 <p>False by default. If set to &#x201C;true&#x201D;, all code relative to metaplaylist streaming

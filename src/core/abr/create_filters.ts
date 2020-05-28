@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-import objectAssign from "object-assign";
 import {
   combineLatest as observableCombineLatest,
   Observable,
   of as observableOf,
 } from "rxjs";
 import { map } from "rxjs/operators";
+import objectAssign from "../../utils/object_assign";
 import { IABRFilters } from "./representation_estimator";
 
 /**
@@ -39,20 +39,21 @@ export default function createFilters(
 ) : Observable<IABRFilters> {
   const deviceEventsArray : Array<Observable<IABRFilters>> = [];
 
-  if (limitWidth$) {
+  if (limitWidth$ != null) {
     deviceEventsArray.push(limitWidth$.pipe(map(width => ({ width }))));
   }
-  if (throttle$) {
+  if (throttle$ != null) {
     deviceEventsArray.push(throttle$.pipe(map(bitrate => ({ bitrate }))));
   }
-  if (throttleBitrate$) {
+  if (throttleBitrate$ != null) {
     deviceEventsArray.push(throttleBitrate$.pipe(map(bitrate => ({ bitrate }))));
   }
 
   // Emit restrictions on the pools of available representations to choose
   // from.
-  return deviceEventsArray.length ?
+  return deviceEventsArray.length > 0 ?
     observableCombineLatest(deviceEventsArray)
-      .pipe(map((args : IABRFilters[]) => objectAssign({}, ...args))) :
+      .pipe(map((args : IABRFilters[]) : IABRFilters =>
+        objectAssign({}, ...args) as IABRFilters)) :
     observableOf({});
 }

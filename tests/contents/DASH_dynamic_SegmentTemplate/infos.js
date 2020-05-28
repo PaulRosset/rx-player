@@ -10,6 +10,7 @@ const BASE_URL = "http://" +
 export default {
   url: BASE_URL + "Manifest.mpd",
   transport: "dash",
+  isDynamic: true,
   isLive: true,
   periods: [
     {
@@ -26,7 +27,7 @@ export default {
                 mimeType: "audio/mp4",
                 index: {
                   init: {
-                    mediaURL: BASE_URL + "A48/init.mp4",
+                    mediaURLs: [BASE_URL + "A48/init.mp4"],
                   },
                   segments: [
                   ],
@@ -47,7 +48,7 @@ export default {
                 mimeType: "video/mp4",
                 index: {
                   init: {
-                    mediaURL: BASE_URL + "V300/init.mp4",
+                    mediaURLs: [BASE_URL + "V300/init.mp4"],
                   },
                   segments: [
                   ],

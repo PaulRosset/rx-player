@@ -24,7 +24,6 @@ import { MediaError } from "../../errors";
 /**
  * Returns an observable which throws the right MediaError as soon an "error"
  * event is received through the media element.
- * @see MediaError
  * @param {HTMLMediaElement} mediaElement
  * @returns {Observable}
  */
@@ -33,7 +32,8 @@ export default function throwOnMediaError(
 ) : Observable<never> {
   return observableFromEvent(mediaElement, "error")
     .pipe(mergeMap(() => {
-      const errorCode = mediaElement.error && mediaElement.error.code;
+      const errorCode = mediaElement.error == null ? 0 :
+                                                    mediaElement.error.code;
       switch (errorCode) {
         case 1:
           throw new MediaError("MEDIA_ERR_ABORTED",

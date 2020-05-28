@@ -29,18 +29,18 @@ describe("DASH live content (SegmentTemplate)", function() {
       transport: manifestInfos.transport,
     });
 
-    expect(xhrMock.getLockedXHR().length).to.equal(1);
     await sleep(1);
+    expect(xhrMock.getLockedXHR().length).to.equal(1);
     await xhrMock.flush();
     await sleep(1);
 
     const manifest = player.getManifest();
     expect(manifest).not.to.equal(null);
     expect(typeof manifest).to.equal("object");
-    expect(manifest.getDuration()).to.equal(undefined);
     expect(manifest.transport)
       .to.equal(manifestInfos.transport);
     expect(typeof manifest.id).to.equal("string");
+    expect(manifest.isDynamic).to.equal(true);
     expect(manifest.isLive).to.equal(true);
     expect(manifest.getUrl()).to.equal(manifestInfos.url);
 
@@ -66,15 +66,13 @@ describe("DASH live content (SegmentTemplate)", function() {
       .to.equal(firstAudioAdaptationInfos.representations.length);
     expect(adaptations.audio[0].getAvailableBitrates())
       .to.eql(firstAudioAdaptationInfos.representations
-        .map(representation => representation.bitrate)
-      );
+        .map(representation => representation.bitrate));
 
     const firstVideoAdaptationInfos = firstPeriodAdaptationsInfos.video[0];
     expect(adaptations.video[0].type).to.equal("video");
     expect(adaptations.video[0].getAvailableBitrates())
       .to.eql(firstVideoAdaptationInfos.representations
-        .map(representation => representation.bitrate)
-      );
+        .map(representation => representation.bitrate));
 
     const audioRepresentation = adaptations.audio[0].representations[0];
     const audioRepresentationInfos = firstAudioAdaptationInfos
@@ -92,8 +90,8 @@ describe("DASH live content (SegmentTemplate)", function() {
     const audioRepresentationIndexInfos = audioRepresentationInfos.index;
     const initAudioSegment = audioRepresentationIndex.getInitSegment();
     expect(typeof initAudioSegment.id).to.equal("string");
-    expect(initAudioSegment.mediaURL).to
-      .equal(audioRepresentationIndexInfos.init.mediaURL);
+    expect(initAudioSegment.mediaURLs).to
+      .deep.equal(audioRepresentationIndexInfos.init.mediaURLs);
 
     const videoRepresentation = adaptations.video[0].representations[0];
     const videoRepresentationInfos = firstVideoAdaptationInfos
@@ -118,15 +116,15 @@ describe("DASH live content (SegmentTemplate)", function() {
 
     const initVideoSegment = videoRepresentationIndex.getInitSegment();
     expect(typeof initVideoSegment.id).to.equal("string");
-    expect(initVideoSegment.mediaURL)
-      .to.equal(videoRepresentationIndexInfos.init.mediaURL);
+    expect(initVideoSegment.mediaURLs)
+      .to.deep.equal(videoRepresentationIndexInfos.init.mediaURLs);
 
     expect(xhrMock.getLockedXHR().length).to.be.at.least(2);
     const requestsDone = xhrMock.getLockedXHR().map(r => r.url);
     expect(requestsDone)
-      .to.include(videoRepresentationIndexInfos.init.mediaURL);
+      .to.include(videoRepresentationIndexInfos.init.mediaURLs[0]);
     expect(requestsDone)
-      .to.include(audioRepresentationIndexInfos.init.mediaURL);
+      .to.include(audioRepresentationIndexInfos.init.mediaURLs[0]);
   });
 
   it("should list the right bitrates", async function () {
@@ -358,15 +356,14 @@ describe("DASH live content without timeShiftBufferDepth (SegmentTemplate)", fun
       transport: noTimeShiftBufferDepthManifestInfos.transport,
     });
 
-    expect(xhrMock.getLockedXHR().length).to.equal(1);
     await sleep(1);
+    expect(xhrMock.getLockedXHR().length).to.equal(1);
     await xhrMock.flush();
     await sleep(1);
 
     const manifest = player.getManifest();
     expect(manifest).not.to.equal(null);
     expect(typeof manifest).to.equal("object");
-    expect(manifest.getDuration()).to.equal(undefined);
     expect(manifest.transport)
       .to.equal(noTimeShiftBufferDepthManifestInfos.transport);
     expect(typeof manifest.id).to.equal("string");
@@ -396,15 +393,13 @@ describe("DASH live content without timeShiftBufferDepth (SegmentTemplate)", fun
       .to.equal(firstAudioAdaptationInfos.representations.length);
     expect(adaptations.audio[0].getAvailableBitrates())
       .to.eql(firstAudioAdaptationInfos.representations
-        .map(representation => representation.bitrate)
-      );
+        .map(representation => representation.bitrate));
 
     const firstVideoAdaptationInfos = firstPeriodAdaptationsInfos.video[0];
     expect(adaptations.video[0].type).to.equal("video");
     expect(adaptations.video[0].getAvailableBitrates())
       .to.eql(firstVideoAdaptationInfos.representations
-        .map(representation => representation.bitrate)
-      );
+        .map(representation => representation.bitrate));
 
     const audioRepresentation = adaptations.audio[0].representations[0];
     const audioRepresentationInfos = firstAudioAdaptationInfos
@@ -422,8 +417,8 @@ describe("DASH live content without timeShiftBufferDepth (SegmentTemplate)", fun
     const audioRepresentationIndexInfos = audioRepresentationInfos.index;
     const initAudioSegment = audioRepresentationIndex.getInitSegment();
     expect(typeof initAudioSegment.id).to.equal("string");
-    expect(initAudioSegment.mediaURL).to
-      .equal(audioRepresentationIndexInfos.init.mediaURL);
+    expect(initAudioSegment.mediaURLs).to
+      .deep.equal(audioRepresentationIndexInfos.init.mediaURLs);
 
     const videoRepresentation = adaptations.video[0].representations[0];
     const videoRepresentationInfos = firstVideoAdaptationInfos
@@ -448,15 +443,15 @@ describe("DASH live content without timeShiftBufferDepth (SegmentTemplate)", fun
 
     const initVideoSegment = videoRepresentationIndex.getInitSegment();
     expect(typeof initVideoSegment.id).to.equal("string");
-    expect(initVideoSegment.mediaURL)
-      .to.equal(videoRepresentationIndexInfos.init.mediaURL);
+    expect(initVideoSegment.mediaURLs)
+      .to.deep.equal(videoRepresentationIndexInfos.init.mediaURLs);
 
     expect(xhrMock.getLockedXHR().length).to.be.at.least(2);
     const requestsDone = xhrMock.getLockedXHR().map(r => r.url);
     expect(requestsDone)
-      .to.include(videoRepresentationIndexInfos.init.mediaURL);
+      .to.include(videoRepresentationIndexInfos.init.mediaURLs[0]);
     expect(requestsDone)
-      .to.include(audioRepresentationIndexInfos.init.mediaURL);
+      .to.include(audioRepresentationIndexInfos.init.mediaURLs[0]);
   });
 
   it("should list the right bitrates", async function () {

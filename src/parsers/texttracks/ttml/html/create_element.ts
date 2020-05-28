@@ -14,33 +14,37 @@
  * limitations under the License.
  */
 
-import objectAssign from "object-assign";
+import { addClassName } from "../../../../compat";
+import isNonEmptyString from "../../../../utils/is_non_empty_string";
+import objectAssign from "../../../../utils/object_assign";
 import getParentElementsByTagName from "../get_parent_elements_by_tag_name";
 import {
   getStylingAttributes,
   IStyleList,
   IStyleObject,
 } from "../get_styling";
-import { REGXP_PERCENT_VALUES } from "../regexps";
+import applyExtent from "./apply_extent";
+import applyFontSize from "./apply_font_size";
+import applyLineHeight from "./apply_line_height";
+import applyOrigin from "./apply_origin";
+import applyPadding from "./apply_padding";
 import generateCSSTextOutline from "./generate_css_test_outline";
 import ttmlColorToCSSColor from "./ttml_color_to_css_color";
 
 // Styling which can be applied to <span> from any level upper.
 // Added here as an optimization
-const SPAN_LEVEL_ATTRIBUTES = [
-  "color",
-  "direction",
-  "display",
-  "fontFamily",
-  "fontSize",
-  "fontStyle",
-  "fontWeight",
-  "textDecoration",
-  "textOutline",
-  "unicodeBidi",
-  "visibility",
-  "wrapOption",
-];
+const SPAN_LEVEL_ATTRIBUTES = [ "color",
+                                "direction",
+                                "display",
+                                "fontFamily",
+                                "fontSize",
+                                "fontStyle",
+                                "fontWeight",
+                                "textDecoration",
+                                "textOutline",
+                                "unicodeBidi",
+                                "visibility",
+                                "wrapOption" ];
 
 // TODO
 // tts:showBackground (applies to region)
@@ -58,19 +62,19 @@ function applyTextStyle(
 ) {
   // applies to span
   const color = style.color;
-  if (color) {
+  if (isNonEmptyString(color)) {
     element.style.color = ttmlColorToCSSColor(color);
   }
 
   // applies to body, div, p, region, span
   const backgroundColor = style.backgroundColor;
-  if (backgroundColor) {
+  if (isNonEmptyString(backgroundColor)) {
     element.style.backgroundColor = ttmlColorToCSSColor(backgroundColor);
   }
 
   // applies to span
   const textOutline = style.textOutline;
-  if (textOutline) {
+  if (isNonEmptyString(textOutline)) {
     const outlineData = textOutline.trim().replace(/\s+/g, " ").split(" ");
     const len = outlineData.length;
     if (len === 3) {
@@ -78,7 +82,7 @@ function applyTextStyle(
       const thickness = outlineData[1];
       element.style.textShadow =
         generateCSSTextOutline(outlineColor, thickness);
-    } else if (color && len === 1) {
+    } else if (isNonEmptyString(color) && len === 1) {
       const thickness = outlineData[0];
       element.style.textShadow = generateCSSTextOutline(color, thickness);
     } else if (len === 2) {
@@ -90,9 +94,8 @@ function applyTextStyle(
         if (isFirstArgAColor) {
           const outlineColor = ttmlColorToCSSColor(outlineData[0]);
           const thickness = outlineData[1];
-          element.style.textShadow =
-            generateCSSTextOutline(outlineColor, thickness);
-        } else if (color) {
+          element.style.textShadow = generateCSSTextOutline(outlineColor, thickness);
+        } else if (isNonEmptyString(color)) {
           const thickness = outlineData[0];
           element.style.textShadow = generateCSSTextOutline(color, thickness);
         }
@@ -102,7 +105,7 @@ function applyTextStyle(
 
   // applies to span
   const textDecoration = style.textDecoration;
-  if (textDecoration) {
+  if (isNonEmptyString(textDecoration)) {
     switch (textDecoration) {
       case "noUnderline":
       case "noLineThrough":
@@ -120,7 +123,7 @@ function applyTextStyle(
 
   // applies to span
   const fontFamily = style.fontFamily;
-  if (fontFamily) {
+  if (isNonEmptyString(fontFamily)) {
     switch (fontFamily) {
 
       case "proportionalSansSerif":
@@ -151,32 +154,34 @@ function applyTextStyle(
 
   // applies to span
   const fontStyle = style.fontStyle;
-  if (fontStyle) {
+  if (isNonEmptyString(fontStyle)) {
     element.style.fontStyle = fontStyle;
   }
 
   // applies to span
   const fontWeight = style.fontWeight;
-  if (fontWeight) {
+  if (isNonEmptyString(fontWeight)) {
     element.style.fontWeight = fontWeight;
   }
 
   // applies to span
   const fontSize = style.fontSize;
-  if (fontSize) {
-    // TODO Check if formats are always really 1:1
-    element.style.fontSize = fontSize;
+  if (isNonEmptyString(fontSize)) {
+    applyFontSize(element, fontSize);
+  } else {
+    addClassName(element, "proportional-style");
+    element.setAttribute("data-proportional-font-size", "1");
   }
 
   // applies to p, span
   const direction = style.direction;
-  if (direction) {
+  if (isNonEmptyString(direction)) {
     element.style.direction = direction;
   }
 
   // applies to p, span
   const unicodeBidi = style.unicodeBidi;
-  if (unicodeBidi) {
+  if (isNonEmptyString(unicodeBidi)) {
     switch (unicodeBidi) {
       case "bidiOverride":
         element.style.unicodeBidi = "bidi-override";
@@ -191,7 +196,7 @@ function applyTextStyle(
 
   // applies to body, div, p, region, span
   const visibility = style.visibility;
-  if (visibility) {
+  if (isNonEmptyString(visibility)) {
     element.style.visibility = visibility;
   }
 
@@ -219,48 +224,38 @@ function applyGeneralStyle(
 ) {
   // applies to tt, region
   const extent = style.extent;
-  if (extent) {
-    const results = REGXP_PERCENT_VALUES.exec(extent);
-    if (results != null) {
-      element.style.width = results[1] + "%";
-      element.style.height = results[2] + "%";
-    }
+  if (isNonEmptyString(extent)) {
+    applyExtent(element, extent);
   }
 
   // applies to region
   const writingMode = style.writingMode;
-  if (writingMode) {
+  if (isNonEmptyString(writingMode)) {
     // TODO
   }
 
   // applies to region
   const overflow = style.overflow;
-  element.style.overflow = overflow || "hidden";
+  element.style.overflow = isNonEmptyString(overflow) ? overflow :
+                                                        "hidden";
 
   // applies to region
   const padding = style.padding;
-  if (padding) {
-    element.style.padding = padding;
+  if (isNonEmptyString(padding)) {
+    applyPadding(element, padding);
   }
 
   // applies to region
   const origin = style.origin;
-  if (origin) {
-    const resultsPercent = REGXP_PERCENT_VALUES.exec(origin);
-    if (resultsPercent != null) {
-      element.style.position = "relative";
-      element.style.left = resultsPercent[1] + "%";
-      element.style.top = resultsPercent[2] + "%";
-    } else {
-      // TODO also px
-    }
+  if (isNonEmptyString(origin)) {
+    applyOrigin(element, origin);
   }
 
   // applies to region
   const displayAlign = style.displayAlign;
   element.style.display = "flex";
   element.style.flexDirection = "column";
-  if (displayAlign) {
+  if (isNonEmptyString(displayAlign)) {
     switch (displayAlign) {
       case "before":
         element.style.justifyContent = "flex-start";
@@ -276,13 +271,13 @@ function applyGeneralStyle(
 
   // applies to region
   const opacity = style.opacity;
-  if (opacity) {
+  if (isNonEmptyString(opacity)) {
     element.style.opacity = opacity;
   }
 
   // applies to body, div, p, region, span
   const visibility = style.visibility;
-  if (visibility) {
+  if (isNonEmptyString(visibility)) {
     element.style.visibility = visibility;
   }
 
@@ -302,22 +297,23 @@ function applyPStyle(
   element : HTMLElement,
   style : Partial<Record<string, string>>
 ) {
+  element.style.margin = "0px";
+
   // applies to body, div, p, region, span
   const paragraphBackgroundColor = style.backgroundColor;
-  if (paragraphBackgroundColor) {
-    element.style.backgroundColor =
-      ttmlColorToCSSColor(paragraphBackgroundColor);
+  if (isNonEmptyString(paragraphBackgroundColor)) {
+    element.style.backgroundColor = ttmlColorToCSSColor(paragraphBackgroundColor);
   }
 
   // applies to p
   const lineHeight = style.lineHeight;
-  if (lineHeight) {
-    element.style.lineHeight = lineHeight;
+  if (isNonEmptyString(lineHeight)) {
+    applyLineHeight(element, lineHeight);
   }
 
   // applies to p
   const textAlign = style.textAlign;
-  if (textAlign) {
+  if (isNonEmptyString(textAlign)) {
     switch (textAlign) {
       case "center":
         element.style.textAlign = "center";
@@ -354,7 +350,8 @@ function createTextElement(
 ) : HTMLElement {
   const textElement = document.createElement("span");
 
-  let textContent = el.textContent || "";
+  let textContent = el.textContent === null ? "" :
+                                              el.textContent;
 
   if (shouldTrimWhiteSpace) {
     // 1. Trim leading and trailing whitespace.
@@ -409,9 +406,11 @@ function generateTextContent(
     for (let i = 0; i < childNodes.length; i++) {
       const currentNode = childNodes[i];
       if (currentNode.nodeName === "#text") {
-        const { backgroundColor } = getStylingAttributes(
-          ["backgroundColor"], spans, styles, regions);
-        if (backgroundColor) {
+        const { backgroundColor } = getStylingAttributes(["backgroundColor"],
+                                                         spans,
+                                                         styles,
+                                                         regions);
+        if (isNonEmptyString(backgroundColor)) {
           style.backgroundColor = backgroundColor;
         } else {
           delete style.backgroundColor;
@@ -421,30 +420,35 @@ function generateTextContent(
       } else if (currentNode.nodeName === "br") {
         const br = document.createElement("BR");
         elements.push(br);
-      } else if (
-        currentNode.nodeName === "span" &&
-        currentNode.nodeType === Node.ELEMENT_NODE &&
-        currentNode.childNodes.length > 0
-      ) {
+      } else if (currentNode.nodeName === "span" &&
+                 currentNode.nodeType === Node.ELEMENT_NODE &&
+                 currentNode.childNodes.length > 0)
+      {
         const spaceAttribute = (currentNode as Element).getAttribute("xml:space");
-        const shouldTrimWhiteSpaceOnSpan = spaceAttribute ?
-          spaceAttribute === "default" : shouldTrimWhiteSpaceFromParent;
+        const shouldTrimWhiteSpaceOnSpan =
+          isNonEmptyString(spaceAttribute) ? spaceAttribute === "default" :
+                                             shouldTrimWhiteSpaceFromParent;
 
         // compute the new applyable style
-        const newStyle = objectAssign({}, style, getStylingAttributes(
-          SPAN_LEVEL_ATTRIBUTES, [currentNode], styles, regions));
+        const newStyle = objectAssign({},
+                                      style,
+                                      getStylingAttributes(SPAN_LEVEL_ATTRIBUTES,
+                                                           [currentNode],
+                                                           styles,
+                                                           regions));
 
-        elements.push(...loop(
-          currentNode,
-          newStyle,
-          [currentNode, ...spans],
-          shouldTrimWhiteSpaceOnSpan)
-        );
+        elements.push(...loop(currentNode,
+                              newStyle,
+                              [currentNode, ...spans],
+                              shouldTrimWhiteSpaceOnSpan));
       }
     }
     return elements;
   }
-  return loop(paragraph, objectAssign({}, paragraphStyle), [], shouldTrimWhiteSpace);
+  return loop(paragraph,
+              objectAssign({}, paragraphStyle),
+              [],
+              shouldTrimWhiteSpace);
 }
 
 /**
@@ -462,21 +466,27 @@ export default function createElement(
   regions : IStyleObject[],
   styles : IStyleObject[],
   paragraphStyle : IStyleList,
-  shouldTrimWhiteSpace : boolean
+  { cellResolution,
+    shouldTrimWhiteSpace } : { shouldTrimWhiteSpace : boolean;
+                               cellResolution : { columns : number;
+                                                  rows : number; }; }
 ) : HTMLElement {
   const divs = getParentElementsByTagName(paragraph, "div");
 
   const parentElement = document.createElement("DIV");
   parentElement.className = "rxp-texttrack-region";
+  parentElement.setAttribute("data-resolution-columns",
+                             String(cellResolution.columns));
+  parentElement.setAttribute("data-resolution-rows",
+                             String(cellResolution.rows));
 
   applyGeneralStyle(parentElement, paragraphStyle);
-  if (body) {
+  if (body !== null) {
     // applies to body, div, p, region, span
     const { bodyBackgroundColor } = getStylingAttributes(
       ["backgroundColor"], [...divs, body], styles, regions);
-    if (bodyBackgroundColor) {
-      parentElement.style.backgroundColor =
-        ttmlColorToCSSColor(bodyBackgroundColor);
+    if (isNonEmptyString(bodyBackgroundColor)) {
+      parentElement.style.backgroundColor = ttmlColorToCSSColor(bodyBackgroundColor);
     }
   }
 

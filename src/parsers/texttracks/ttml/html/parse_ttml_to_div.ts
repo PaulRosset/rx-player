@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-import objectAssign from "object-assign";
 import arrayFind from "../../../../utils/array_find";
+import isNonEmptyString from "../../../../utils/is_non_empty_string";
+import objectAssign from "../../../../utils/object_assign";
 import getParameters from "../get_parameters";
 import getParentElementsByTagName from "../get_parent_elements_by_tag_name";
 import {
@@ -29,38 +30,38 @@ import {
   getStyleNodes,
   getTextNodes,
 } from "../nodes";
+import resolveStylesInheritance from "../resolve_styles_inheritance";
 import parseCue, {
   ITTMLHTMLCue,
 } from "./parse_cue";
 
- const STYLE_ATTRIBUTES = [
-  "backgroundColor",
-  "color",
-  "direction",
-  "display",
-  "displayAlign",
-  "extent",
-  "fontFamily",
-  "fontSize",
-  "fontStyle",
-  "fontWeight",
-  "lineHeight",
-  "opacity",
-  "origin",
-  "overflow",
-  "padding",
-  "textAlign",
-  "textDecoration",
-  "textOutline",
-  "unicodeBidi",
-  "visibility",
-  "wrapOption",
-  "writingMode",
+ const STYLE_ATTRIBUTES = [ "backgroundColor",
+                            "color",
+                            "direction",
+                            "display",
+                            "displayAlign",
+                            "extent",
+                            "fontFamily",
+                            "fontSize",
+                            "fontStyle",
+                            "fontWeight",
+                            "lineHeight",
+                            "opacity",
+                            "origin",
+                            "overflow",
+                            "padding",
+                            "textAlign",
+                            "textDecoration",
+                            "textOutline",
+                            "unicodeBidi",
+                            "visibility",
+                            "wrapOption",
+                            "writingMode",
 
-  // Not managed anywhere for now
-  // "showBackground",
-  // "zIndex",
-];
+                            // Not managed anywhere for now
+                            // "showBackground",
+                            // "zIndex",
+                            ];
 
 /**
  * Create array of objects which should represent the given TTML text track.
@@ -87,10 +88,10 @@ export default function parseTTMLStringToDIV(
   const ret : ITTMLHTMLCue[] = [];
   const xml = new DOMParser().parseFromString(str, "text/xml");
 
-  if (xml) {
+  if (xml !== null && xml !== undefined) {
     const tts = xml.getElementsByTagName("tt");
     const tt = tts[0];
-    if (!tt) {
+    if (tt === undefined) {
       throw new Error("invalid XML");
     }
 
@@ -98,45 +99,47 @@ export default function parseTTMLStringToDIV(
     const styleNodes = getStyleNodes(tt);
     const regionNodes = getRegionNodes(tt);
     const paragraphNodes = getTextNodes(tt);
-    const params = getParameters(tt);
+    const ttParams = getParameters(tt);
 
-    // construct styles array based on the xml as an optimization
-    const styles : IStyleObject[]  = [];
+    // construct idStyles array based on the xml as an optimization
+    const idStyles : IStyleObject[]  = [];
     for (let i = 0; i <= styleNodes.length - 1; i++) {
       const styleNode = styleNodes[i];
       if (styleNode instanceof Element) {
         const styleID = styleNode.getAttribute("xml:id");
         if (styleID !== null) {
-          // TODO styles referencing other styles
-          styles.push({
-            id: styleID,
-            style: getStylingFromElement(styleNode),
-          });
+          const subStyles = styleNode.getAttribute("style");
+          const extendsStyles = subStyles === null ? [] :
+                                                     subStyles.split(" ");
+          idStyles.push({ id: styleID,
+                          style: getStylingFromElement(styleNode),
+                          extendsStyles });
         }
       }
     }
 
-    // construct regions array based on the xml as an optimization
-    const regions : IStyleObject[] = [];
+    resolveStylesInheritance(idStyles);
+
+    // construct regionStyles array based on the xml as an optimization
+    const regionStyles : IStyleObject[] = [];
     for (let i = 0; i <= regionNodes.length - 1; i++) {
       const regionNode = regionNodes[i];
       if (regionNode instanceof Element) {
         const regionID = regionNode.getAttribute("xml:id");
         if (regionID !== null) {
-          let regionStyle =
-            getStylingFromElement(regionNode);
-
-          const associatedStyle = regionNode.getAttribute("style");
-          if (associatedStyle) {
-            const style = arrayFind(styles, (x) => x.id === associatedStyle);
-            if (style) {
+          let regionStyle = getStylingFromElement(regionNode);
+          const associatedStyleID = regionNode.getAttribute("style");
+          if (isNonEmptyString(associatedStyleID)) {
+            const style = arrayFind(idStyles, (x) => x.id === associatedStyleID);
+            if (style !== undefined) {
               regionStyle = objectAssign({}, style.style, regionStyle);
             }
           }
-          regions.push({
-            id: regionID,
-            style: regionStyle,
-          });
+          regionStyles.push({ id: regionID,
+                              style: regionStyle,
+
+                              // already handled
+                              extendsStyles: [] });
         }
       }
     }
@@ -149,37 +152,41 @@ export default function parseTTMLStringToDIV(
     // style) to speed up the process even
     // more.
     const bodyStyle = body !== null ?
-      getStylingAttributes(STYLE_ATTRIBUTES, [body], styles, regions) :
-      getStylingAttributes(STYLE_ATTRIBUTES, [], styles, regions);
+      getStylingAttributes(STYLE_ATTRIBUTES, [body], idStyles, regionStyles) :
+      getStylingAttributes(STYLE_ATTRIBUTES, [], idStyles, regionStyles);
 
-    const bodySpaceAttribute = body ? body.getAttribute("xml:space") : undefined;
-    const shouldTrimWhiteSpaceOnBody =
-      bodySpaceAttribute === "default" || params.spaceStyle === "default";
+    const bodySpaceAttribute = body !== null ? body.getAttribute("xml:space") :
+                                               undefined;
+    const shouldTrimWhiteSpaceOnBody = bodySpaceAttribute === "default" ||
+                                       ttParams.spaceStyle === "default";
 
     for (let i = 0; i < paragraphNodes.length; i++) {
       const paragraph = paragraphNodes[i];
       if (paragraph instanceof Element) {
         const divs = getParentElementsByTagName(paragraph , "div");
-        const paragraphStyle = objectAssign({}, bodyStyle,
-          getStylingAttributes(
-            STYLE_ATTRIBUTES, [paragraph, ...divs], styles, regions)
-        );
+        const paragraphStyle = objectAssign({},
+                                            bodyStyle,
+                                            getStylingAttributes(STYLE_ATTRIBUTES,
+                                                                 [paragraph,
+                                                                  ...divs],
+                                                                 idStyles,
+                                                                 regionStyles));
 
         const paragraphSpaceAttribute = paragraph.getAttribute("xml:space");
-        const shouldTrimWhiteSpaceOnParagraph = paragraphSpaceAttribute ?
-          paragraphSpaceAttribute === "default" : shouldTrimWhiteSpaceOnBody;
+        const shouldTrimWhiteSpaceOnParagraph =
+          isNonEmptyString(paragraphSpaceAttribute) ?
+            paragraphSpaceAttribute === "default" :
+            shouldTrimWhiteSpaceOnBody;
 
-        const cue = parseCue(
-          paragraph,
-          timeOffset,
-          styles,
-          regions,
-          body,
-          paragraphStyle,
-          params,
-          shouldTrimWhiteSpaceOnParagraph
-        );
-        if (cue) {
+        const cue = parseCue(paragraph,
+                             timeOffset,
+                             idStyles,
+                             regionStyles,
+                             body,
+                             paragraphStyle,
+                             ttParams,
+                             shouldTrimWhiteSpaceOnParagraph);
+        if (cue !== null) {
           ret.push(cue);
         }
       }

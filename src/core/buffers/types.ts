@@ -54,7 +54,7 @@ export interface IBufferNeedsDiscontinuitySeek {
   type : "discontinuity-encountered";
   value : {
     bufferType : IBufferType; // The type of the Representation
-    nextTime : number; // the time we should seek to TODO this is ugly
+    gap : [number, number]; // the time we should seek to TODO this is ugly
   };
 }
 
@@ -73,12 +73,17 @@ export interface IBufferStateActive {
 // State emitted when the buffer has been filled to the end
 export interface IBufferStateFull {
   type : "full-buffer";
-  value : {
-    bufferType : IBufferType; // The type of the Representation
-  };
+
+  // The type of the Representation
+  value : { bufferType : IBufferType };
 }
 
-// State emitted when the buffer waits
+/** Emitted when a segment with protection information has been encountered. */
+export interface IProtectedSegmentEvent {
+  type : "protected-segment";
+  value : { type : string;
+            data : Uint8Array; }; }
+
 export type IRepresentationBufferStateEvent = IBufferNeededActions |
                                               IBufferStateFull |
                                               IBufferStateActive |
@@ -86,6 +91,7 @@ export type IRepresentationBufferStateEvent = IBufferNeededActions |
 
 // Events emitted by the Buffer
 export type IRepresentationBufferEvent<T> = IBufferEventAddedSegment<T> |
+                                            IProtectedSegmentEvent |
                                             IRepresentationBufferStateEvent |
                                             IBufferWarningEvent;
 
@@ -109,6 +115,7 @@ export interface IRepresentationChangeEvent {
 export type IAdaptationBufferEvent<T> = IRepresentationBufferEvent<T> |
                                         IBitrateEstimationChangeEvent |
                                         INeedsMediaSourceReload |
+                                        INeedsDecipherabilityFlush |
                                         IRepresentationChangeEvent;
 
 // The currently-downloaded Adaptation changed.
@@ -150,7 +157,17 @@ export interface ICompletedBufferEvent { type: "complete-buffer";
 // The MediaSource needs to be reloaded to continue
 export interface INeedsMediaSourceReload { type: "needs-media-source-reload";
                                            value: { currentTime : number;
-                                                    isPaused : boolean; }; }
+                                                    isPaused : boolean;
+                                                    period : Period; }; }
+
+// Emitted after the buffers have been cleaned due to an update of the
+// decipherability status of some segment.
+// It now needs the current buffer to be "flushed" to be sure it can
+// continue.
+export interface INeedsDecipherabilityFlush { type: "needs-decipherability-flush";
+                                              value: { currentTime : number;
+                                                       isPaused : boolean;
+                                                       duration : number; }; }
 
 // Events coming from single PeriodBuffer
 export type IPeriodBufferEvent = IPeriodBufferReadyEvent |

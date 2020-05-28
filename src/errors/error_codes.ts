@@ -38,6 +38,7 @@ export type IMediaErrorCode = "BUFFER_APPEND_ERROR" |
                               "BUFFER_TYPE_UNKNOWN" |
                               "MANIFEST_INCOMPATIBLE_CODECS_ERROR" |
                               "MANIFEST_PARSE_ERROR" |
+                              "MANIFEST_UPDATE_ERROR" |
                               "MANIFEST_UNSUPPORTED_ADAPTATION_TYPE" |
                               "MEDIA_ERR_ABORTED" |
                               "MEDIA_ERR_BLOCKED_AUTOPLAY" |
@@ -52,12 +53,14 @@ export type IMediaErrorCode = "BUFFER_APPEND_ERROR" |
                               "MEDIA_STARTING_TIME_NOT_FOUND" |
                               "MEDIA_TIME_BEFORE_MANIFEST" |
                               "MEDIA_TIME_AFTER_MANIFEST" |
-                              "MEDIA_TIME_NOT_FOUND";
+                              "MEDIA_TIME_NOT_FOUND" |
+                              "NO_PLAYABLE_REPRESENTATION";
 
 export type INetworkErrorCode = "PIPELINE_LOAD_ERROR";
 
 export type IOtherErrorCode = "PIPELINE_LOAD_ERROR" |
                               "PIPELINE_PARSE_ERROR" |
+                              "INTEGRITY_ERROR" |
                               "NONE";
 
 export type IErrorCode = INetworkErrorCode |
@@ -65,7 +68,7 @@ export type IErrorCode = INetworkErrorCode |
                          IEncryptedMediaErrorCode |
                          IOtherErrorCode;
 
-export type IRequestErrorType = "TIMEOUT" |
+export type INetworkErrorType = "TIMEOUT" |
                                 "ERROR_EVENT" |
                                 "PARSE_ERROR" |
                                 "ERROR_HTTP_CODE";
@@ -77,7 +80,7 @@ const ErrorTypes : Record<IErrorType, IErrorType> = {
   OTHER_ERROR: "OTHER_ERROR",
 };
 
-const RequestErrorTypes : Record<IRequestErrorType, IRequestErrorType> = {
+const NetworkErrorTypes : Record<INetworkErrorType, INetworkErrorType> = {
   TIMEOUT: "TIMEOUT",
   ERROR_EVENT: "ERROR_EVENT",
   ERROR_HTTP_CODE: "ERROR_HTTP_CODE",
@@ -87,15 +90,19 @@ const RequestErrorTypes : Record<IRequestErrorType, IRequestErrorType> = {
 const ErrorCodes : Record<IErrorCode, IErrorCode>  = {
   PIPELINE_LOAD_ERROR: "PIPELINE_LOAD_ERROR",
   PIPELINE_PARSE_ERROR: "PIPELINE_PARSE_ERROR",
+  INTEGRITY_ERROR: "INTEGRITY_ERROR",
 
   MANIFEST_PARSE_ERROR: "MANIFEST_PARSE_ERROR",
   MANIFEST_INCOMPATIBLE_CODECS_ERROR: "MANIFEST_INCOMPATIBLE_CODECS_ERROR",
+  MANIFEST_UPDATE_ERROR: "MANIFEST_UPDATE_ERROR",
   MANIFEST_UNSUPPORTED_ADAPTATION_TYPE: "MANIFEST_UNSUPPORTED_ADAPTATION_TYPE",
 
   MEDIA_STARTING_TIME_NOT_FOUND: "MEDIA_STARTING_TIME_NOT_FOUND",
   MEDIA_TIME_BEFORE_MANIFEST: "MEDIA_TIME_BEFORE_MANIFEST",
   MEDIA_TIME_AFTER_MANIFEST: "MEDIA_TIME_AFTER_MANIFEST",
   MEDIA_TIME_NOT_FOUND: "MEDIA_TIME_NOT_FOUND",
+
+  NO_PLAYABLE_REPRESENTATION: "NO_PLAYABLE_REPRESENTATION",
 
   MEDIA_IS_ENCRYPTED_ERROR: "MEDIA_IS_ENCRYPTED_ERROR",
 
@@ -134,6 +141,6 @@ const ErrorCodes : Record<IErrorCode, IErrorCode>  = {
 
 export {
   ErrorTypes,
-  RequestErrorTypes,
+  NetworkErrorTypes,
   ErrorCodes,
 };

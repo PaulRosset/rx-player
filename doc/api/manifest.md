@@ -34,14 +34,16 @@ Basically, the structure of a Manifest file has the following hierarchy:
 ```
 Manifest Object
   ...Manifest data and methods
-  Adaptation Object
-    ...Adaptation data and methods
-    Representation Object
-      ...Representation data and methods
-      RepresentationIndex Object
-        ...RepresentationIndex data and methods
-          SegmentObject
-          ...SegmentObject data
+  Period Object
+    ...Period properties
+    Adaptation Object
+      ...Adaptation data and methods
+      Representation Object
+        ...Representation data and methods
+        RepresentationIndex Object
+          ...RepresentationIndex data and methods
+            SegmentObject
+            ...SegmentObject data
 ```
 
 Due to this highly hierachical structure, each level will be described in its
@@ -300,6 +302,18 @@ The bitrate of the Representation.
 _type_: ``string|undefined``
 
 The codec of the Representation.
+
+#### decipherable
+
+_type_: ``boolean|undefined``
+
+Whether we are able to decrypt this Representation / unable to decrypt it or
+if we don't know yet:
+  - if `true`, it means that we know we were able to decrypt this
+    Representation in the current content.
+  - if `false`, it means that we know we were unable to decrypt this
+    Representation
+  - if `undefined` there is no certainty on this matter
 
 #### height
 

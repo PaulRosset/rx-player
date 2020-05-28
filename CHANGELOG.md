@@ -1,5 +1,188 @@
 # Changelog
 
+## v3.20.1 (2020/05/06)
+
+### Bug fixes
+
+  - eme: fix `OTHER_ERROR` issue arising when loading a new encrypted media when a previous since-disposed instance of the RxPlayer played encrypted contents on the same media element
+  - eme: fix `OTHER_ERROR` issue arising on Internet Explorer 11 when playing more than one encrypted content
+  - eme: fix issue where more than 50 active MediaKeySessions at the same time could lead to infinite rebuffering when playing back a previous content with multiple encryption keys
+  - directfile: for directfile contents, don't reset to the preferred audio, text or video track when the track list changes
+  - eme: remove any possibility of collision in the storage of EME initialization data. The previous behavior could theorically lead some initialization data to be ignored.
+  - eme: fix typo which conflated an EME "internal-error" key status and an "output-restricted" one.
+
+
+## v3.20.0 (2020/04/22)
+
+### Features
+
+  - api: add `disableVideoTrack` method
+  - api: add the `preferredVideoTrack` constructor option and `setPreferredVideoTracks` / `getPreferredVideoTracks` methods to set a video track preference (or to start with the video track disabled).
+  - api: add optional `codec` property to preferred audio tracks APIs, allowing applications to communicate a codec preference.
+  - api: make the `language` and `audioDescription` properties in `preferredAudioTracks`' objects optional.
+  - api: add `signInterpreted` to `getVideoTrack` and `getAvailableVideoTracks` return objects to know when a track contains sign language interpretation
+
+### Deprecated
+
+  - api: deprecate the `getManifest()` method
+  - api: deprecate the `getCurrentAdaptations()` method
+  - api: deprecate the `getCurrentRepresentations()` method
+
+### Bug fixes
+
+  - compat/eme: Set proper EME Safari implementation, to play contents with DRM on it without issues
+  - compat/directfile/iOS: On Safari iOS, fix auto-play warnings when a directfile content is played with the `playsinline` attribute set.
+  - directfile: In Directfile mode, always disable the current text track when a `null` is encountered in the preferredTextTracks array
+
+### Other improvements
+
+  - abr: ignore requests that may have directly hit the cache in our adaptive logic
+  - dash/perf: improve parsing efficiency for very large MPDs, at the expense of a very small risk of de-synchronization. Mechanisms still allow for regular re-synchronization.
+
+
+## v3.19.0 (2020/03/11)
+
+### Features
+
+  - dash: handle multiple URL per segment anounced through multiple BaseURL elements in the MPD
+  - dash/smooth/metaplaylist: add `manifestUpdateUrl` to loadVideo's `transportOptions` to provide a shorter version of the Manifest, used for more resource-efficient Manifest updates
+  - tools/createMetaplaylist: add the experimental `createMetaplaylist` tool, which allows to generate Metaplaylist contents from given Manifests
+  - tools/TextTrackRenderer: add the optional `language` property to the `setTextTrack` method of the experimental `TextTrackRenderer` tool as it could be needed when parsing SAMI subtitles
+  - types: export IAvailableAudioTrack, IAvailableTextTrack and IAvailableVideoTrack types
+  - types: export IAudioTrack, ITextTrack and IVideoTrack types
+
+### Bug fixes
+
+  - dash/smooth: fix segment url resolution when there is query parameters in the Manifest URL and/or segment path, themselves containing "/" characters
+  - local-manifest: fix videoElement's duration and `getVideoDuration` for contents in the experimental `local` transport
+  - tools/parseBifThumbnails: do not return an un-displayable ArrayBuffer of the whole thing in each `image` property in the experimental `parseBifThumbnails` function
+
+### Other improvements
+
+  - compat: avoid pushing a segment on top of the current position in Safari, as it can sometime lead to green macro-blocks
+  - dash: add multiple performance improvements related to MPD parsing on embedded devices
+  - dash/smooth/metaplaylist/local: refresh less often the Manifest when parsing it takes too much time to improve performance
+  - smooth: filter unsupported video and audio QualityLevels when parsing a Smooth Manifest
+  - build: greatly reduce the time needed to produce a modular build through the `npm run build:modular` script
+  - build: remove Object.assign dependency
+
+
+## v3.18.0 (2020/01/30)
+
+### Features
+
+  - directfile: support most audio tracks API when playing a directfile content
+  - directfile: support most text tracks API when playing a directfile content
+  - directfile: support most video tracks API when playing a directfile content
+  - api: add `seeking` and `seeked` events which anounce the beginning and end of a seek, even when seeking to an already buffered part
+  - subtitles/ttml: handle styles inheriting other styles in TTML subtitles
+  - local-manifest: add experimental `local` transport to allow the playback of downloaded contents (even when offline)
+  - tools: add the experimental `TextTrackRenderer` tool to be able to add a custom text track to any content
+  - tools: add the experimental `parseBifThumbnails` tool to easily parse thumbnails in the BIF format
+
+### Deprecated
+
+  - api: deprecate the `supplementaryTextTracks` loadVideo option in profit of the external TextTrackRenderer tool
+  - api: aeprecate the `supplementaryImageTracks` loadVideo option in profit of the external parseBifThumbnails tool
+  - api: deprecate the `getImageTrackData` method in profit of the external `parseBifThumbnails` tool
+  - api: deprecate the `imageTrackUpdate` event in profit of the external `parseBifThumbnails` tool
+  - api: deprecate `hideNativeSubtitles` (officially)
+
+### Bug fixes
+
+  - subtitles/ttml: Correctly handle alpha information in the rgba values included in a TTML file
+  - images/bif: fix sometimes incorrect "ts" value on thumbnails returned by the `getImageTrackData` method and the `imageTrackUpdate` event
+
+### Other improvements
+
+  - node: allow the RxPlayer to be imported from Node.js for server-side-rendering
+  - images/bif: throw a better error when an invalid BIF file is received
+  - api: be more "generous" with player events by ditching the deep-equal npm module due to package size and some edge-case behavior
+  - demo: avoid re-rendering multiple ui components when unnecessary
+
+
+## v3.17.1 (2019/12/20)
+
+### Bug fixes
+
+  - dash/metaplaylist: fix infinite rebuffering issue when refreshing multi-Period contents under specific conditions
+  - buffer: be less aggressive when garbage collecting subtitles (if the maxBufferAhead/maxBufferBehind options are set) to avoid useful subtitles being removed
+  - directfile/compat: for directfile contents, trigger directly the LOADED state on iOS/iPad/iPod browsers as those are not preloaded there
+
+### Other improvements
+
+  - demo: display clickable "play" button on the video element when autoplay is blocked due to browser policies - to help users unlock the situation
+  - demo: add "Other" key system to allow specifying a custom key system in the demo page
+
+
+## v3.17.0 (2019/12/09)
+
+### Features
+
+ - eme/api: add keySystems.fallbackOn property to `loadVideo` to allow fallbacking to other qualities when encountering various key errors
+ - eme/api: allow to set `fallbackOnLastTry` on a `getLicense` Error to be able to fallback on other qualities when a license request is on error
+ - eme/api: add `NO_PLAYABLE_REPRESENTATION` `MediaError` for when every video or audio quality cannot be played
+ - manifest/api: add `decipherable` property to a Representation object
+ - api: add `decipherabilityUpdate` event triggered when a Representation's decipherability status is updated
+ - languages/api: add `dub` boolean to audio tracks (through `getAudioTrack` and `getAvailableAudioTracks`) to tell if this is a dubbed track
+ - languages/ttml: with TTML subtitles, support length relative to the Computed Cell Size for `tts:fontSize`, `tts:padding`, `tts:extent`, `tts:origin` and `tts:lineHeight`
+ - transports/api: add `checkMediaSegmentIntegrity` `transportOptions` to automatically retry media segments which appear corrupted
+ - transports/api: add `minimumManifestUpdateInterval` `transportOptions` to limit the Manifest update frequency
+ - transports/api: add "progress" callback to a custom segmentLoader to improve adaptive streaming when an external segment loader is used
+
+### Bug fixes
+
+ - dash/metaplaylist: download the first segment of a new Period when the last downloaded segment from the previous Period ends after that segment ends
+ - smooth/metaplaylist: consider `serverSyncInfos` `transportOptions` for Smooth and MetaPlaylist contents
+ - buffers: completely clean a previous audio/text track from the SourceBuffer when switching to a different audio/text track
+ - dash: avoid requesting an inexistant segment when downloading a multi-Period DASH content with a number-based SegmentTemplate with the `agressiveMode` option set to `true`
+ - eme: do not wait for a previous invalid MediaKeySession to be closed before re-creating a valid one for the same content, to work around a widevine issue
+ - eme: avoid race condition issue arising when multiple init data are received before the MediaKeys have been attached to the media element
+ - dash: do not consider "trickmodes" AdaptationSet as directly playable video tracks
+ - directfile: begin directly at the end (instead of the beginning) when setting a `startAt` loadVideo option with a `fromLastPosition` property set to `0` on directfile contents
+ - metaplaylist: fix playback for non-live MetaPlaylist contents not starting at a `0` time
+
+### Other improvements
+
+ - abr: better estimate a lower bitrate after a sudden fall in bandwidth
+ - dash/low-latency: properly use @availabilityTimeOffset when playing a low-latency DASH content
+ - code: use only strict boolean expressions in the code (do not rely on falsy or truthy values anymore).
+ - demo: add buffer content graphs to the demo page to vizualize exactly what have been buffered
+ - demo: improve accessibility of the demo page for the english-speaking visually impaired
+ - misc: replace uglifyJS by terser for minification purposes
+
+
+
+## v3.16.1 (2019/10/03)
+
+### Bug fixes
+
+  - dash: update timeshiftBufferDepth considered when refreshing the MPD
+  - dash: fix infinite rebuffering issue when refreshing a Multi-Period MPD with the oldest Periods removed
+  - api: go to `"SEEKING"` state instead of `"BUFFERING"` when seeking while the player is in the "BUFFERING" state
+  - api: Avoid reinitializing the video, audio and text track choice after a `"RELOADING"` state
+  - api: When going back to a Period on which `disableTextTracks` was called, keep the text track disabled even if different `preferredTextTracks` are set
+  - smooth: Replace ``{CustomAttributes}`` token in a segment URL
+  - dash: load the last segment of a Period when it is declared in a SegmentTemplate (with no SegmentTimeline) and when its end is exactly equal to the end of the Period
+
+### Other improvements
+
+  - dash/metaplaylist: be more tolerant with the appendWindows set as the previous behavior could lead to infinite rebuffering and segments re-downloading
+  - dash/metaplaylist/smooth: Better handle discontinuities in a VoD content
+  - dash/metaplaylist: Handle discontinuities between DASH Periods and between MetaPlaylist contents
+  - dash/smooth: Avoid requesting multiple time the last segment when the duration given in the Manifest are inexact
+  - smooth: Skip without throwing Manifest's StreamIndex with an unrecognized type
+  - dash: Improve prediction of when to update a dynamic MPD with xlinks
+  - dash: Be more tolerant of differences between a segment's time anounced by the Manifest and the reality to avoid multiple cases of segment re-downloading
+  - dash: Guess initialization range for segments defined in a SegmentBase without an Initialization element
+  - dash: Throw better error when a sidx with a reference_type `1` is encountered
+  - api: Throw a better error when setting a `preferredAudioTracks` or `preferredTextTracks` value in the wrong format
+  - demo: Allow to export and share demo links with custom contents
+  - demo: Fix video track switching in the demo page
+  - demo: Fix spinner not hiding when playing on very specific conditions
+  - demo: reset playback rate before loading a content
+
+
 ## v3.16.0 (2019/09/16)
 
 ### Features

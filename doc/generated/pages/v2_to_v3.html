@@ -222,12 +222,12 @@ changed (all were synonyms in ISO 639-2):</p>
 <span class="hljs-keyword">const</span> oldVersionResult = [
   {
     <span class="hljs-attr">language</span>: <span class="hljs-string">&quot;fre&quot;</span>, <span class="hljs-comment">// translated from &quot;fr&quot;</span>
-    audioDescription: <span class="hljs-literal">false</span>,
+    <span class="hljs-attr">audioDescription</span>: <span class="hljs-literal">false</span>,
     <span class="hljs-attr">id</span>: <span class="hljs-string">&quot;audio_1&quot;</span>
   },
   {
     <span class="hljs-attr">language</span>: <span class="hljs-string">&quot;eng&quot;</span>, <span class="hljs-comment">// translated from &quot;en&quot;</span>
-    audioDescription: <span class="hljs-literal">false</span>,
+    <span class="hljs-attr">audioDescription</span>: <span class="hljs-literal">false</span>,
     <span class="hljs-attr">id</span>: <span class="hljs-string">&quot;audio_2&quot;</span>
   }
 ];
@@ -236,15 +236,15 @@ changed (all were synonyms in ISO 639-2):</p>
 <span class="hljs-keyword">const</span> result = [
   {
     <span class="hljs-attr">language</span>: <span class="hljs-string">&quot;fr&quot;</span>, <span class="hljs-comment">// stays the same than in the manifest</span>
-    normalized: <span class="hljs-string">&quot;fra&quot;</span>, <span class="hljs-comment">// translated from &quot;fr&quot;</span>
+    <span class="hljs-attr">normalized</span>: <span class="hljs-string">&quot;fra&quot;</span>, <span class="hljs-comment">// translated from &quot;fr&quot;</span>
                        <span class="hljs-comment">// (notice that it&apos;s not &quot;fre&quot; like before)</span>
-    audioDescription: <span class="hljs-literal">false</span>,
+    <span class="hljs-attr">audioDescription</span>: <span class="hljs-literal">false</span>,
     <span class="hljs-attr">id</span>: <span class="hljs-string">&quot;audio_1&quot;</span>
   },
   {
     <span class="hljs-attr">language</span>: <span class="hljs-string">&quot;en&quot;</span>, <span class="hljs-comment">// stays the same than in the manifest</span>
-    normalized: <span class="hljs-string">&quot;eng&quot;</span>, <span class="hljs-comment">// translated from &quot;en&quot;</span>
-    audioDescription: <span class="hljs-literal">false</span>,
+    <span class="hljs-attr">normalized</span>: <span class="hljs-string">&quot;eng&quot;</span>, <span class="hljs-comment">// translated from &quot;en&quot;</span>
+    <span class="hljs-attr">audioDescription</span>: <span class="hljs-literal">false</span>,
     <span class="hljs-attr">id</span>: <span class="hljs-string">&quot;audio_2&quot;</span>
   }
 ];
@@ -495,8 +495,15 @@ player.loadVideo({
 <a name="subchapter-subtitles%20parameter"></a></p>
 <h3>subtitles parameter</h3>
 <h4>What changed</h4>
-<p><code>subtitles</code> is renamed as <code>supplementaryTextTracks</code> for clarity.</p>
+<p>You have two possibilities. Either:</p>
+<ol>
+<li>Use the exernal <code>TextTrackRenderer</code> tool, documented
+<a href="api/TextTrackRenderer.html">here</a>. This is the preferred way.</li>
+<li>Replace <code>subtitles</code> by <code>supplementaryTextTracks</code>. Please note
+however that <code>supplementaryTextTracks</code> is a deprecated feature.</li>
+</ol>
 <h4>Replacement example</h4>
+<p>If you go under the <code>supplementaryTextTracks</code> route:</p>
 <pre><code class="language-js"><span class="hljs-comment">// In the previous version</span>
 player.loadVideo({
   <span class="hljs-attr">url</span>: someURL,
@@ -515,6 +522,9 @@ player.loadVideo({
   },
 });
 </code></pre>
+<p>If you prefer to use the <code>TextTrackRenderer</code> instead, I invite you to directly
+read, <a href="api/TextTrackRenderer.html">its documentation</a>, as the API is completely
+different there.</p>
 <p><a name="load-timeFragment"></a>
 <a name="subchapter-timeFragment%20parameter"></a></p>
 <h3>timeFragment parameter</h3>
@@ -549,18 +559,18 @@ player.loadVideo({
   <span class="hljs-attr">manifests</span>: [
     {
       <span class="hljs-attr">url</span>: someURL1
-      keySystem: keySystem1
+      <span class="hljs-attr">keySystem</span>: keySystem1
     },
     {
       <span class="hljs-attr">url</span>: someURL2
     },
     {
       <span class="hljs-attr">url</span>: someURL3
-      keySystem: keySystem3
+      <span class="hljs-attr">keySystem</span>: keySystem3
     },
     {
       <span class="hljs-attr">url</span>: someURL4
-      keySystem: keySystem4
+      <span class="hljs-attr">keySystem</span>: keySystem4
     }
   ],
 });

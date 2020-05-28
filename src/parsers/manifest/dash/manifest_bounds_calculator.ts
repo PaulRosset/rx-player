@@ -18,7 +18,7 @@
  * This class allows to easily calculate the first and last available positions
  * in a content at any time.
  *
- * That task can be an hard for live DASH contents: it depends on a
+ * That task can be an hard for dynamic DASH contents: it depends on a
  * `timeShiftBufferDepth` defined in the MPD and on the maximum possible
  * position.
  *
@@ -58,17 +58,24 @@
  * @class ManifestBoundsCalculator
  */
 export default class ManifestBoundsCalculator {
+  /** Value of MPD@timeShiftBufferDepth. */
   private _timeShiftBufferDepth : number | null;
+  /** Value of `performance.now` at the time `lastPosition` was calculated. */
   private _positionTime : number | undefined;
+  /** Last position calculated at a given moment (itself indicated by `_positionTime`. */
   private _lastPosition : number | undefined;
+  /** `true` if MPD@type is equal to "dynamic". */
   private _isDynamic : boolean;
 
+  /**
+   * @param {Object} args
+   */
   constructor(args : { timeShiftBufferDepth? : number;
                        isDynamic : boolean; }
   ) {
     this._isDynamic = args.isDynamic;
     this._timeShiftBufferDepth = !args.isDynamic ||
-                                 args.timeShiftBufferDepth == null ?
+                                 args.timeShiftBufferDepth === undefined ?
                                    null :
                                    args.timeShiftBufferDepth;
   }
@@ -85,7 +92,8 @@ export default class ManifestBoundsCalculator {
    * manifestBoundsCalculator.setLastPosition(lastPosition, positionTime);
    * ```
    *
-   * @param {number} lastPositionOffset
+   * @param {number} lastPosition
+   * @param {number|undefined} positionTime
    */
   setLastPosition(lastPosition : number, positionTime?: number) {
     this._lastPosition = lastPosition;
@@ -94,7 +102,7 @@ export default class ManifestBoundsCalculator {
 
   /**
    * Returns `true` if the last position and the position time
-   * (for live content only) have been comunicated.
+   * (for dynamic content only) have been comunicated.
    * `false` otherwise.
    * @returns {boolean}
    */

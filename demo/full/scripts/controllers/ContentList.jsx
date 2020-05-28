@@ -6,11 +6,17 @@ import {
   removeStoredContent,
 } from "../lib/localStorage.js";
 import parseDRMConfigurations from "../lib/parseDRMConfigurations.js";
+import {
+  generateLinkForCustomContent,
+  parseHashInURL,
+} from "../lib/url_hash.js";
 import Button from "../components/Button.jsx";
 import FocusedTextInput from "../components/FocusedInput.jsx";
 import TextInput from "../components/Input.jsx";
 import Select from "../components/Select.jsx";
 import contentsDatabase from "../contents.js";
+import GeneratedLinkURL from "../components/GenerateLinkURL.jsx";
+import GenerateLinkButton from "../components/GenerateLinkButton.jsx";
 
 const MediaKeys_ = window.MediaKeys ||
                    window.MozMediaKeys ||
@@ -30,8 +36,10 @@ const HAS_EME_APIs = (
 
 const IS_HTTPS = window.location.protocol.startsWith("https");
 
+const CUSTOM_DRM_NAME = "Other";
+
 const TRANSPORT_TYPES = ["DASH", "Smooth", "DirectFile", "MetaPlaylist"];
-const DRM_TYPES = ["Widevine", "Playready", "Clearkey"];
+const DRM_TYPES = ["Widevine", "Playready", "Clearkey", CUSTOM_DRM_NAME];
 
 const DISABLE_ENCRYPTED_CONTENT = !HAS_EME_APIs && !IS_HTTPS;
 
@@ -54,10 +62,7 @@ function formatContent(content) {
       displayName = "[HTTP only] " + displayName;
       isDisabled = true;
     }
-  } else if (!HAS_EME_APIs &&
-             content.drmInfos &&
-               content.drmInfos.length)
-  {
+  } else if (!HAS_EME_APIs && content.drmInfos && content.drmInfos.length) {
     displayName = "[HTTPS only] " + displayName;
     isDisabled = true;
   }
@@ -72,17 +77,19 @@ function formatContent(content) {
     isLocalContent = true;
   }
 
-  return { url: content.url,
-           contentName: content.name,
+  return { contentName: content.name,
+           displayName,
+           drmInfos: content.drmInfos,
+           fallbackKeyError: !!content.fallbackKeyError,
+           fallbackLicenseRequest: !!content.fallbackLicenseRequest,
            id: content.id,
-           transport: content.transport,
+           isDisabled,
+           isLocalContent,
+           isLowLatency: !!content.lowLatency,
            supplementaryImageTracks: content.supplementaryImageTracks,
            supplementaryTextTracks: content.supplementaryTextTracks,
-           drmInfos: content.drmInfos,
-           displayName,
-           isDisabled,
-           isLowLatency: !!content.lowLatency,
-           isLocalContent };
+           transport: content.transport,
+           url: content.url };
 }
 
 /**
@@ -114,6 +121,57 @@ function constructContentList() {
 }
 
 /**
+ * Generate URL with hash-string which can be used to reload the page with the
+ * current stored content or demo content. This can be used for example to
+ * share some content with other people.
+ * Returns null if it could not generate an URL for the current content.
+ * @param {Object} content - The content object as constructed in the
+ * ContentList.
+ * @param {Object} state - The current ContentList state.
+ * @returns {string|null}
+ */
+function generateLinkForContent(
+  content,
+  { autoPlay,
+    transportType,
+    fallbackKeyError,
+    fallbackLicenseRequest },
+) {
+  if (content == null) {
+    return null;
+  }
+  const licenseServerUrl = content.drmInfos && content.drmInfos[0] &&
+    content.drmInfos[0].licenseServerUrl;
+  const serverCertificateUrl = content.drmInfos && content.drmInfos[0] &&
+    content.drmInfos[0].serverCertificateUrl;
+  return generateLinkForCustomContent({
+    autoPlay,
+    chosenDRMType: content.drmInfos &&
+      content.drmInfos[0] &&
+      content.drmInfos[0].drm,
+    customKeySystem: content.drmInfos &&
+      content.drmInfos[0] &&
+      content.drmInfos[0].customKeySystem,
+    fallbackKeyError,
+    fallbackLicenseRequest,
+    manifestURL: content.url,
+    licenseServerUrl,
+    lowLatency: !!content.isLowLatency,
+    serverCertificateUrl,
+    transport: transportType,
+  });
+}
+
+/**
+ * @param {HTMLElement} checkBoxElt
+ * @returns {boolean}
+ */
+function getCheckBoxValue(checkBoxElt) {
+  return checkBoxElt.type === "checkbox" ?
+    !!checkBoxElt.checked : !!checkBoxElt.value;
+}
+
+/**
  * Returns index of the first content to display according to all contents
  * available.
  * @param {Array.<Object>} contentList
@@ -134,6 +192,31 @@ function getIndexOfFirstEnabledContent(contentList) {
   return contentChoiceIndex;
 }
 
+/**
+ * @param {Array.<Object>} drmInfos
+ * @param {Object} fallbacks
+ * @returns {Promise.<Array.<Object>>}
+ */
+function getKeySystemsOption(
+  drmInfos,
+  { fallbackKeyError,
+    fallbackLicenseRequest },
+) {
+  const wantedDRMs = drmInfos
+    .map(drmInfo => ({
+      drm: drmInfo.drm === CUSTOM_DRM_NAME ?
+        drmInfo.customKeySystem :
+        drmInfo.drm,
+      licenseServerUrl: drmInfo.licenseServerUrl,
+      serverCertificateUrl: drmInfo.serverCertificateUrl,
+      fallbackKeyError,
+      fallbackLicenseRequest,
+    }))
+    .filter(drmInfo => drmInfo.drm !== undefined);
+
+  return parseDRMConfigurations(wantedDRMs);
+}
+
 class ContentList extends React.Component {
   constructor(...args) {
     super(...args);
@@ -145,9 +228,13 @@ class ContentList extends React.Component {
                    contentChoiceIndex: 0,
                    contentNameField: "",
                    contentsPerType,
-                   currentDRMType: DRM_TYPES[0],
+                   chosenDRMType: DRM_TYPES[0],
+                   customKeySystem: "",
                    currentManifestURL: "",
+                   displayGeneratedLink: false,
                    displayDRMSettings: false,
+                   fallbackKeyError: false,
+                   fallbackLicenseRequest: false,
                    isSavingOrUpdating: false,
                    licenseServerUrl: "",
                    lowLatencyChecked: false,
@@ -156,6 +243,38 @@ class ContentList extends React.Component {
   }
 
   componentDidMount() {
+    const parsedHash = parseHashInURL(location.hash);
+    if (parsedHash !== null) {
+      const { tech } = parsedHash;
+      if (TRANSPORT_TYPES.includes(tech)) {
+        const { fallbackKeyError,
+                fallbackLicenseRequest,
+                lowLatency } = parsedHash;
+        const newState = { autoPlay: !parsedHash.noAutoplay,
+                           contentChoiceIndex: 0,
+                           contentNameField: "",
+                           contentList: this.state.contentsPerType[tech],
+                           currentManifestURL: parsedHash.manifest,
+                           fallbackKeyError: !!fallbackKeyError,
+                           fallbackLicenseRequest: !!fallbackLicenseRequest,
+                           lowLatencyChecked: tech === "DASH" && !!lowLatency,
+                           transportType: tech };
+
+        const chosenDRMType = DRM_TYPES.includes(parsedHash.drm) ?
+          parsedHash.drm :
+          undefined;
+        if (chosenDRMType !== undefined) {
+          newState.displayDRMSettings = true;
+          newState.chosenDRMType = chosenDRMType;
+          newState.customKeySystem = parsedHash.customKeySystem || "";
+          newState.licenseServerUrl = parsedHash.licenseServ || "";
+          newState.serverCertificateUrl = parsedHash.certServ || "";
+        }
+        this.setState(newState);
+        return;
+      }
+    }
+
     // estimate first index which should be selected
     const contentList = this.state.contentsPerType[this.state.transportType];
     const firstEnabledContentIndex = getIndexOfFirstEnabledContent(contentList);
@@ -177,12 +296,15 @@ class ContentList extends React.Component {
 
     const { url,
             transport,
+            fallbackKeyError,
+            fallbackLicenseRequest,
             supplementaryImageTracks,
             supplementaryTextTracks,
             isLowLatency,
             drmInfos = [] } = content;
 
-    parseDRMConfigurations(drmInfos)
+    getKeySystemsOption(drmInfos, { fallbackKeyError,
+                                    fallbackLicenseRequest })
       .then((keySystems) => {
         loadVideo({ url,
                     transport,
@@ -203,17 +325,16 @@ class ContentList extends React.Component {
    */
   loadUrl(url, drmInfos, autoPlay) {
     const { loadVideo } = this.props;
-    const { lowLatencyChecked } = this.state;
+    const { lowLatencyChecked,
+            fallbackKeyError,
+            fallbackLicenseRequest } = this.state;
 
-    parseDRMConfigurations(drmInfos)
+    getKeySystemsOption(drmInfos, { fallbackKeyError,
+                                    fallbackLicenseRequest })
       .then((keySystems) => {
         loadVideo({ url,
                     transport: this.state.transportType.toLowerCase(),
                     autoPlay,
-
-                    // native browser subtitles engine (VTTCue) doesn"t render
-                    // stylized subs.  We force HTML textTrackMode to vizualise
-                    // styles.
                     textTrackMode: "html",
                     keySystems,
                     lowLatencyMode: lowLatencyChecked });
@@ -227,9 +348,13 @@ class ContentList extends React.Component {
   changeTransportType(transportType) {
     this.setState({ contentChoiceIndex: 0,
                     contentNameField: "",
-                    currentDRMType: DRM_TYPES[0],
+                    chosenDRMType: DRM_TYPES[0],
+                    customKeySystem: "",
                     currentManifestURL: "",
                     displayDRMSettings: false,
+                    displayGeneratedLink: false,
+                    fallbackLicenseRequest: false,
+                    fallbackKeyError: false,
                     isSavingOrUpdating: false,
                     licenseServerUrl: "",
                     lowLatencyChecked: false,
@@ -245,6 +370,7 @@ class ContentList extends React.Component {
   changeSelectedContent(index, content) {
     let currentManifestURL = "";
     let contentNameField = "";
+    let customKeySystem  = "";
     let licenseServerUrl = "";
     let serverCertificateUrl = "";
     const hasDRMSettings = content.drmInfos != null &&
@@ -252,57 +378,28 @@ class ContentList extends React.Component {
     let drm  = null;
     currentManifestURL = content.url;
     contentNameField = content.contentName;
+    const fallbackKeyError = !!content.fallbackKeyError;
+    const fallbackLicenseRequest = !!content.fallbackLicenseRequest;
     const isLowLatency = !!content.isLowLatency;
     if (hasDRMSettings) {
       drm = content.drmInfos[0].drm;
+      customKeySystem = content.drmInfos[0].customKeySystem || "";
       licenseServerUrl = content.drmInfos[0].licenseServerUrl;
       serverCertificateUrl = content.drmInfos[0].serverCertificateUrl;
     }
     this.setState({ contentChoiceIndex: index,
                     contentNameField,
-                    currentDRMType: drm != null ? drm : DRM_TYPES[0],
+                    chosenDRMType: drm != null ? drm : DRM_TYPES[0],
+                    customKeySystem,
                     currentManifestURL,
                     displayDRMSettings: hasDRMSettings,
+                    displayGeneratedLink: false,
+                    fallbackLicenseRequest,
+                    fallbackKeyError,
                     isSavingOrUpdating: false,
                     lowLatencyChecked: isLowLatency,
                     licenseServerUrl,
                     serverCertificateUrl });
-  }
-
-  /**
-   * Display/hide the DRM settings according to the checkbox state.
-   * @param {Event} evt - Event sent by the checkbox when it was changed.
-   */
-  onChangeDisplayDRMSettings(evt) {
-    const { target } = evt;
-    const value = target.type === "checkbox" ?
-      target.checked :
-      target.value;
-    if (value) {
-      this.setState({ displayDRMSettings: true });
-      return;
-    }
-    this.setState({ displayDRMSettings: false,
-                    licenseServerUrl: "",
-                    serverCertificateUrl: "" });
-  }
-
-  /**
-   * Enable/disable autoPlay according to the checkbox state.
-   * @param {Event} evt - Event sent by the checkbox when it was changed.
-   */
-  onChangeAutoPlay(evt) {
-    const { target } = evt;
-    const value = target.type === "checkbox" ?
-      target.checked : target.value;
-    this.setState({ autoPlay: value });
-  }
-
-  onLowLatencyClick(evt) {
-    const { target } = evt;
-    const value = target.type === "checkbox" ?
-      target.checked : target.value;
-    this.setState({ lowLatencyChecked: value });
   }
 
   render() {
@@ -310,9 +407,13 @@ class ContentList extends React.Component {
             contentChoiceIndex,
             contentNameField,
             contentsPerType,
-            currentDRMType,
+            chosenDRMType,
+            customKeySystem,
             currentManifestURL,
+            displayGeneratedLink,
             displayDRMSettings,
+            fallbackKeyError,
+            fallbackLicenseRequest,
             isSavingOrUpdating,
             licenseServerUrl,
             lowLatencyChecked,
@@ -320,9 +421,35 @@ class ContentList extends React.Component {
             transportType } = this.state;
 
     const isCustomContent = contentChoiceIndex === 0;
+    const isCustomDRM = chosenDRMType === CUSTOM_DRM_NAME;
 
     const contentsToSelect = contentsPerType[transportType];
     const chosenContent = contentsToSelect[contentChoiceIndex];
+
+    let generatedLink = null;
+    if (displayGeneratedLink) {
+      generatedLink = contentChoiceIndex === 0 || isSavingOrUpdating ?
+        generateLinkForCustomContent({
+          autoPlay,
+          chosenDRMType: displayDRMSettings ?
+            chosenDRMType :
+            undefined,
+          customKeySystem: displayDRMSettings ?
+            customKeySystem :
+            undefined,
+          fallbackKeyError,
+          fallbackLicenseRequest,
+          manifestURL: currentManifestURL,
+          licenseServerUrl: displayDRMSettings ?
+            licenseServerUrl :
+            undefined,
+          lowLatency: lowLatencyChecked,
+          serverCertificateUrl: displayDRMSettings ?
+            serverCertificateUrl :
+            undefined,
+          transport: transportType,
+        }) : generateLinkForContent(chosenContent, this.state);
+    }
 
     const hasURL = currentManifestURL !== "";
     const isLocalContent = !!(chosenContent &&
@@ -353,7 +480,8 @@ class ContentList extends React.Component {
       if (contentChoiceIndex === 0) {
         const drmInfos = [{ licenseServerUrl,
                             serverCertificateUrl,
-                            drm: currentDRMType }];
+                            drm: chosenDRMType,
+                            customKeySystem }];
         this.loadUrl(currentManifestURL, drmInfos, autoPlay);
       } else {
         this.loadContent(contentsToSelect[contentChoiceIndex]);
@@ -363,10 +491,13 @@ class ContentList extends React.Component {
     const saveCurrentContent = () => {
       const contentToSave = { name: contentNameField,
                               url: currentManifestURL,
+                              fallbackLicenseRequest,
+                              fallbackKeyError,
                               lowLatency: lowLatencyChecked,
                               transport: transportType.toLowerCase(),
                               drmInfos: displayDRMSettings ?
-                                [ { drm: currentDRMType,
+                                [ { drm: chosenDRMType,
+                                    customKeySystem,
                                     licenseServerUrl,
                                     serverCertificateUrl } ] :
                                 undefined,
@@ -423,24 +554,39 @@ class ContentList extends React.Component {
     const onManifestInput = (evt) =>
       this.setState({ currentManifestURL: evt.target.value });
 
+    const onCustomKeySystemInput = (evt) =>
+      this.setState({ customKeySystem: evt.target.value });
+
     const onLicenseServerInput = (evt) =>
       this.setState({ licenseServerUrl: evt.target.value });
 
     const onServerCertificateInput = (evt) =>
       this.setState({ serverCertificateUrl: evt.target.value });
 
-    const onChangeDisplayDRMSettings = (evt) =>
-      this.onChangeDisplayDRMSettings(evt);
+    const onChangeDisplayDRMSettings = (evt) => {
+      const value = getCheckBoxValue(evt.target);
+      if (value) {
+        this.setState({ displayDRMSettings: true });
+        return;
+      }
+      this.setState({ displayDRMSettings: false,
+                      licenseServerUrl: "",
+                      serverCertificateUrl: "" });
+    };
 
     const onAutoPlayClick = (evt) =>
-      this.onChangeAutoPlay(evt);
+      this.setState({ autoPlay: getCheckBoxValue(evt.target) });
 
     const onLowLatencyClick = (evt) => {
-      this.onLowLatencyClick(evt);
+      this.setState({ lowLatencyChecked: getCheckBoxValue(evt.target) });
     };
 
     const onDRMTypeClick = (type) => {
-      this.setState({ currentDRMType: type });
+      if (chosenDRMType === type) {
+        return;
+      }
+      this.setState({ chosenDRMType: type,
+                      customKeySystem: "" });
     };
 
     const onCancel = () => {
@@ -454,10 +600,22 @@ class ContentList extends React.Component {
       return DRM_TYPES.map(type =>
         <Button
           className={"choice-input-button drm-button" +
-            (currentDRMType === type ? " selected" : "")}
+            (chosenDRMType === type ? " selected" : "")}
           onClick={() => onDRMTypeClick(type)}
           value={type}
         />);
+    };
+
+    const onClickGenerateLink = () => {
+      this.setState({ displayGeneratedLink: !displayGeneratedLink });
+    };
+
+    const onChangeFallbackLicenseRequest = (evt) => {
+      this.setState({ fallbackLicenseRequest: getCheckBoxValue(evt.target) });
+    };
+
+    const onChangeFallbackKeyError = (evt) => {
+      this.setState({ fallbackKeyError: getCheckBoxValue(evt.target) });
     };
 
     const selectValues = contentsToSelect.map(c => {
@@ -467,15 +625,23 @@ class ContentList extends React.Component {
 
     return (
       <div className="choice-inputs-wrapper">
+        <span className={"generated-url" + (displayGeneratedLink ? " enabled" : "")}>
+          { displayGeneratedLink ?
+            <GeneratedLinkURL url={generatedLink} /> :
+            null }
+        </span>
         <div className="content-inputs">
           <div className="content-inputs-selects">
             <Select
               className="choice-input transport-type-choice white-select"
+              ariaLabel="Select a transport"
               onChange={onTransportChange}
               options={TRANSPORT_TYPES}
+              selected={TRANSPORT_TYPES.indexOf(transportType)}
             />
             <Select
               className="choice-input content-choice white-select"
+              ariaLabel="Select a content"
               onChange={onContentChoiceChange}
               options={selectValues}
               selected={contentChoiceIndex}
@@ -484,21 +650,28 @@ class ContentList extends React.Component {
           <div className="content-inputs-middle">
             {
               (isCustomContent || isLocalContent) ?
-                (<Button
-                  className={"choice-input-button content-button enter-name-button" +
-                    (!hasURL ? " disabled" : "")}
-                  onClick={onClickSaveOrUpdate}
-                  disabled={!hasURL || isSavingOrUpdating}
-                  value={isLocalContent ?
-                    (isSavingOrUpdating ? "Updating..." : "Update content") :
-                    (isSavingOrUpdating ? "Saving..." : "Store content")}
-                />) :
+                ([
+                  <Button
+                    className={"choice-input-button content-button enter-name-button" +
+                      (!hasURL ? " disabled" : "")}
+                    ariaLabel="Save or update custom content"
+                    onClick={onClickSaveOrUpdate}
+                    disabled={!hasURL || isSavingOrUpdating}
+                    value={isLocalContent ?
+                      (isSavingOrUpdating ? "Updating..." : "Update content") :
+                      (isSavingOrUpdating ? "Saving..." : "Store content")}
+                  />,
+                  <GenerateLinkButton
+                    enabled={displayGeneratedLink}
+                    onClick={onClickGenerateLink} />,
+                ]) :
                 null
             }
             {
               isLocalContent ?
                 (<Button
                   className="choice-input-button erase-button"
+                  ariaLabel="Remove custom content from saved contents"
                   onClick={onClickErase}
                   value={String.fromCharCode(0xf1f8)}
                 />) :
@@ -506,15 +679,21 @@ class ContentList extends React.Component {
             }
           </div>
           <div className="choice-input-button-wrapper">
-            <div class="auto-play">
+            <div className="auto-play">
               AutoPlay
-              <label class="input switch">
-                <input type="checkbox" checked={autoPlay} onChange={onAutoPlayClick} />
-                <span class="slider round"></span>
+              <label className="input switch">
+                <input
+                  type="checkbox"
+                  aria-label="Enable/Disable AutoPlay"
+                  checked={autoPlay}
+                  onChange={onAutoPlayClick}
+                />
+                <span className="slider round"></span>
               </label>
             </div>
             <Button
               className="choice-input-button load-button"
+              ariaLabel="Load the selected content now"
               onClick={onClickLoad}
               value={String.fromCharCode(0xf144)}
             />
@@ -529,6 +708,7 @@ class ContentList extends React.Component {
                     (<div className="update-control">
                       <FocusedTextInput
                         className={"text-input need-to-fill"}
+                        ariaLabel="Name of the custom content to save"
                         onChange={onNameInput}
                         value={contentNameField}
                         placeholder={"Content name"}
@@ -536,11 +716,13 @@ class ContentList extends React.Component {
                       <div className="update-control-buttons">
                         <Button
                           className={"choice-input-button content-button save-button"}
+                          ariaLabel="Save/Update custom content"
                           onClick={saveCurrentContent}
                           disabled={!contentNameField || !currentManifestURL}
                           value={isLocalContent ? "Update" : "Save"}
                         />
                         <Button
+                          ariaLabel="Cancel current modifications for the custom content"
                           className={"choice-input-button content-button cancel-button"}
                           onClick={onCancel}
                           value={"Cancel"}
@@ -550,6 +732,7 @@ class ContentList extends React.Component {
                     : null
                 }
                 <TextInput
+                  ariaLabel="Enter here the Manifest's URL"
                   className="text-input"
                   onChange={onManifestInput}
                   value={currentManifestURL}
@@ -559,18 +742,22 @@ class ContentList extends React.Component {
                     (IS_HTTPS ? " (HTTPS only if mixed contents disabled)" : "")
                   }
                 />
-                <div className="player-box">
-                  <span className={"encryption-checkbox" + (DISABLE_ENCRYPTED_CONTENT ? " disabled" : "")}>
+                <div className="player-box player-box-load">
+                  <span className={
+                    "encryption-checkbox custom-checkbox" +
+                    (DISABLE_ENCRYPTED_CONTENT ? " disabled" : "")}
+                  >
                     {(DISABLE_ENCRYPTED_CONTENT ? "[HTTPS only] " : "") + "Encrypted content"}
-                    <label class="switch">
+                    <label className="switch">
                       <input
+                        aria-label="Enable for an encrypted content"
                         disabled={DISABLE_ENCRYPTED_CONTENT}
                         name="displayDRMSettingsTextInput"
                         type="checkbox"
                         checked={displayDRMSettings}
                         onChange={onChangeDisplayDRMSettings}
                       />
-                      <span class="slider round"></span>
+                      <span className="slider round"></span>
                     </label>
                   </span>
                   {
@@ -579,8 +766,20 @@ class ContentList extends React.Component {
                         <div className="drm-choice">
                           {generateDRMButtons()}
                         </div>
+                        { isCustomDRM ?
+                          <div>
+                            <TextInput
+                              ariaLabel={"Key system reverse domain name (e.g. \"org.w3.clearkey\")"}
+                              className="choice-input text-input"
+                              onChange={onCustomKeySystemInput}
+                              value={customKeySystem}
+                              placeholder={"Key system (reverse domain name)"}
+                            />
+                          </div> :
+                          null }
                         <div>
                           <TextInput
+                            ariaLabel="URL for the license server"
                             className="choice-input text-input"
                             onChange={onLicenseServerInput}
                             value={licenseServerUrl}
@@ -588,22 +787,67 @@ class ContentList extends React.Component {
                           />
                         </div>
                         <TextInput
+                          ariaLabel="URL for the server certificate (optional)"
                           className="choice-input text-input"
                           onChange={onServerCertificateInput}
                           value={serverCertificateUrl}
                           placeholder={"Server certificate URL (optional)"}
                         />
+                        <div>
+                          <span className={"custom-checkbox fallback-checkbox"}>
+                            <span>
+                              {"Fallback if a key is refused "}
+                              <span className="checkbox-indication">
+                                (for content with multiple keys)
+                              </span>
+                            </span>
+                            <label className="input switch fallback-switch">
+                              <input
+                                type="checkbox"
+                                checked={fallbackKeyError}
+                                onChange={onChangeFallbackKeyError} />
+                              <span className="slider round"></span>
+                            </label>
+                          </span>
+                        </div>
+                        <div>
+                          <span className={"custom-checkbox fallback-checkbox"}>
+                            <span>
+                              {"Fallback if the license request fails "}
+                              <span className="checkbox-indication">
+                                (for content with multiple keys)
+                              </span>
+                            </span>
+                            <label className="input switch fallback-switch">
+                              <input
+                                type="checkbox"
+                                checked={fallbackLicenseRequest}
+                                onChange={onChangeFallbackLicenseRequest} />
+                              <span className="slider round"></span>
+                            </label>
+                          </span>
+                        </div>
                       </div> :
                       null
                   }
                 </div>
-                <div class="player-box button-low-latency">
-                  Low-Latency content
-                  <label class="input switch">
-                    <input type="checkbox" checked={lowLatencyChecked} onChange={onLowLatencyClick} />
-                    <span class="slider round"></span>
-                  </label>
-                </div>
+                { transportType === "DASH" ?
+                  <div className="player-box player-box-load button-low-latency">
+                    <span className={"low-latency-checkbox custom-checkbox"}>
+                      Low-Latency content
+                      <label className="input switch">
+                        <input
+                          aria-label="Enable for a low-latency content"
+                          type="checkbox"
+                          checked={lowLatencyChecked}
+                          onChange={onLowLatencyClick}
+                        />
+                        <span className="slider round"></span>
+                      </label>
+                    </span>
+                  </div> :
+                  null
+                }
               </div>
             ) : null
         }

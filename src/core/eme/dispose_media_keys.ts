@@ -33,14 +33,14 @@ export default function disposeMediaKeys(
 ) : Observable<unknown> {
   return observableDefer(() => {
     const currentState = MediaKeysInfosStore.getState(mediaElement);
-    if (!currentState) {
+    if (currentState === null) {
       return observableOf(null);
     }
 
     log.debug("EME: Disposing of the current MediaKeys");
-    const { sessionsStore } = currentState;
+    const { loadedSessionsStore } = currentState;
     MediaKeysInfosStore.clearState(mediaElement);
-    return sessionsStore.closeAllSessions()
+    return loadedSessionsStore.closeAllSessions()
       .pipe(mergeMapTo(setMediaKeys(mediaElement, null)));
   });
 }

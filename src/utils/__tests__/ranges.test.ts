@@ -16,6 +16,7 @@
 
 import {
   convertToRanges,
+  excludeFromRanges,
   getInnerAndOuterTimeRanges,
   getLeftSizeOfRange,
   getNextRangeGap,
@@ -26,6 +27,7 @@ import {
   isAfter,
   isBefore,
   isTimeInRange,
+  isTimeInRanges,
   keepRangeIntersection,
   mergeContiguousRanges,
   removeEmptyRanges,
@@ -485,6 +487,57 @@ describe("utils - ranges", () => {
     });
   });
 
+  describe("excludeFromRanges", () => {
+    it("should return no range if both given are equal", () => {
+      const timeRanges = [
+        { start: 0, end: 10 },
+        { start: 20, end: 30 },
+        { start: 50, end: 70 },
+      ];
+      expect(excludeFromRanges(timeRanges, timeRanges)).toEqual([]);
+    });
+
+    it("should return no range if the second contains the first", () => {
+      const timeRanges1 = [
+        { start: 0, end: 10 },
+        { start: 20, end: 30 },
+        { start: 50, end: 70 },
+      ];
+      const timeRanges2 = [
+        { start: 0, end: 70},
+        { start: 90, end: 100},
+        { start: 100, end: 120},
+      ];
+      expect(excludeFromRanges(timeRanges1, timeRanges2)).toEqual([]);
+    });
+
+    /* tslint:disable max-line-length */
+    it("should return the part of the first range not included in the second range", () => {
+    /* tslint:enable max-line-length */
+      const timeRanges1 = [
+        { start: 10, end: 50 },
+        { start: 80, end: 90 },
+        { start: 105, end: 123 },
+        { start: 150, end: 190 },
+      ];
+      const timeRanges2 = [
+        { start: 20, end: 24 },
+        { start: 40, end: 83 },
+        { start: 105, end: 106 },
+        { start: 106, end: 109 },
+        { start: 120, end: 123 },
+      ];
+      const result = [
+        { start: 10, end: 20 },
+        { start: 24, end: 40 },
+        { start: 83, end: 90 },
+        { start: 109, end: 120 },
+        { start: 150, end: 190 },
+      ];
+      expect(excludeFromRanges(timeRanges1, timeRanges2)).toEqual(result);
+    });
+  });
+
   describe("isTimeInRange", () => {
     it("should return true if the given time is equal to the start of the range", () => {
       expect(isTimeInRange({ start: 30, end: 70 }, 30)).toBe(true);
@@ -506,6 +559,60 @@ describe("utils - ranges", () => {
       expect(isTimeInRange({ start: 30, end: 70 }, 80)).toBe(false);
       expect(isTimeInRange({ start: 72, end: Infinity }, 70)).toBe(false);
       expect(isTimeInRange({ start: 0, end: 1 }, 7)).toBe(false);
+    });
+  });
+
+  describe("isTimeInRanges", () => {
+    it("should return false for no range", () => {
+      expect(isTimeInRanges([], 72)).toBe(false);
+      expect(isTimeInRanges([], 0)).toBe(false);
+      expect(isTimeInRanges([], -Infinity)).toBe(false);
+      expect(isTimeInRanges([], Infinity)).toBe(false);
+      expect(isTimeInRanges([], NaN)).toBe(false);
+    });
+
+    /* tslint:disable max-line-length */
+    it("should return true if the given time is equal to the start of one of the ranges", () => {
+    /* tslint:enable max-line-length */
+      const ranges = [ { start: 0, end: 1 },
+                       { start: 30, end: 70 },
+                       { start: 72, end: 74 },
+                       { start: 74, end: Infinity } ];
+      expect(isTimeInRanges(ranges, 30)).toBe(true);
+      expect(isTimeInRanges(ranges, 72)).toBe(true);
+      expect(isTimeInRanges(ranges, 74)).toBe(true);
+      expect(isTimeInRanges(ranges, 0)).toBe(true);
+    });
+
+    /* tslint:disable max-line-length */
+    it("should return false if the given time is only the end of one of the ranges", () => {
+    /* tslint:enable max-line-length */
+      const ranges = [ { start: 0, end: 1 },
+                       { start: 30, end: 70 },
+                       { start: 72, end: 74 },
+                       { start: 74, end: Infinity } ];
+      expect(isTimeInRanges(ranges, 1)).toBe(false);
+      expect(isTimeInRanges(ranges, 70)).toBe(false);
+      expect(isTimeInRanges(ranges, 74)).toBe(true);
+    });
+
+    it("should return true if the given time is inside one of the ranges", () => {
+      const ranges = [ { start: 0, end: 1 },
+                       { start: 30, end: 70 },
+                       { start: 72, end: 74 },
+                       { start: 74, end: Infinity } ];
+      expect(isTimeInRanges(ranges, 0.5)).toBe(true);
+      expect(isTimeInRanges(ranges, 34)).toBe(true);
+      expect(isTimeInRanges(ranges, 9001)).toBe(true);
+    });
+    it("should return false if the given time is not inside one of the ranges", () => {
+      const ranges = [ { start: 0, end: 1 },
+                       { start: 30, end: 70 },
+                       { start: 72, end: 74 },
+                       { start: 74, end: Infinity } ];
+      expect(isTimeInRanges(ranges, -4)).toBe(false);
+      expect(isTimeInRanges(ranges, 2)).toBe(false);
+      expect(isTimeInRanges(ranges, 70.1)).toBe(false);
     });
   });
 

@@ -26,6 +26,7 @@ import {
 import clearTimelineFromPosition from "../utils/clear_timeline_from_position";
 import { getIndexSegmentEnd } from "../utils/index_helpers";
 import isSegmentStillAvailable from "../utils/is_segment_still_available";
+import updateSegmentTimeline from "../utils/update_segment_timeline";
 import addSegmentInfos from "./utils/add_segment_infos";
 import { replaceSegmentSmoothTokens } from "./utils/tokens";
 
@@ -108,8 +109,9 @@ function normalizeRange(
 ) : { up: number;
       to: number; }
 {
-  const timescale = index.timescale || 1;
-
+  const timescale = index.timescale === undefined ||
+                    index.timescale === 0 ? 1 :
+                                            index.timescale;
   return { up: start * timescale,
            to: (start + duration) * timescale };
 }
@@ -122,9 +124,9 @@ function normalizeRange(
  */
 function calculateRepeat(
   segment : IIndexSegment,
-  nextSegment : IIndexSegment
+  nextSegment? : IIndexSegment
 ) : number {
-  let repeatCount = segment.repeatCount || 0;
+  let repeatCount = segment.repeatCount;
 
   // A negative value of the @r attribute of the S element indicates
   // that the duration indicated in @d attribute repeats until the
@@ -132,7 +134,8 @@ function calculateRepeat(
   // next MPD update.
   // TODO Also for SMOOTH????
   if (segment.duration != null && repeatCount < 0) {
-    const repeatEnd = nextSegment ? nextSegment.start : Infinity;
+    const repeatEnd = nextSegment !== undefined ? nextSegment.start :
+                                                  Infinity;
     repeatCount = Math.ceil((repeatEnd - segment.start) / segment.duration) - 1;
   }
 
@@ -145,6 +148,7 @@ export interface ISmoothRIOptions {
   segmentPrivateInfos : ISmoothInitSegmentPrivateInfos;
 }
 
+// Information allowing to generate an init segment
 interface ISmoothInitSegmentPrivateInfos {
   bitsPerSample? : number;
   channels? : number;
@@ -221,7 +225,7 @@ export default class SmoothRepresentationIndex implements IRepresentationIndex {
     this._isAggressiveMode = aggressiveMode;
     this._isLive = isLive;
 
-    if (index.timeline.length) {
+    if (index.timeline.length !== 0) {
       const lastItem = index.timeline[index.timeline.length - 1];
       const scaledEnd = getIndexSegmentEnd(lastItem, null);
       this._initialScaledLastPosition = scaledEnd;
@@ -244,7 +248,7 @@ export default class SmoothRepresentationIndex implements IRepresentationIndex {
              duration: 0,
              timescale: this._index.timescale,
              privateInfos: { smoothInit: this._initSegmentInfos },
-             mediaURL: null };
+             mediaURLs: null };
   }
 
   /**
@@ -286,13 +290,13 @@ export default class SmoothRepresentationIndex implements IRepresentationIndex {
         const number = currentNumber != null ?
           currentNumber + segmentNumberInCurrentRange :
           undefined;
-        const segment = { id: "" + segmentTime,
+        const segment = { id: String(segmentTime),
                           time,
                           isInit: false,
                           duration,
                           timescale,
                           number,
-                          mediaURL: replaceSegmentSmoothTokens(media, time) };
+                          mediaURLs: [replaceSegmentSmoothTokens(media, time)] };
         segments.push(segment);
 
         // update segment number and segment time for the next segment
@@ -328,11 +332,11 @@ export default class SmoothRepresentationIndex implements IRepresentationIndex {
     const { timeline, timescale } = this._index;
 
     const lastSegmentInCurrentTimeline = timeline[timeline.length - 1];
-    if (!lastSegmentInCurrentTimeline) {
+    if (lastSegmentInCurrentTimeline === undefined) {
       return false;
     }
 
-    const repeat = lastSegmentInCurrentTimeline.repeatCount || 0;
+    const repeat = lastSegmentInCurrentTimeline.repeatCount;
     const endOfLastSegmentInCurrentTimeline =
       lastSegmentInCurrentTimeline.start + (repeat + 1) *
         lastSegmentInCurrentTimeline.duration;
@@ -363,7 +367,7 @@ export default class SmoothRepresentationIndex implements IRepresentationIndex {
   getFirstPosition() : number|null {
     this._refreshTimeline();
     const index = this._index;
-    if (!index.timeline.length) {
+    if (index.timeline.length === 0) {
       return null;
     }
     return index.timeline[0].start / index.timescale;
@@ -467,12 +471,12 @@ export default class SmoothRepresentationIndex implements IRepresentationIndex {
   }
 
   /**
-   * Update this RepresentationIndex by a newly downloaded one.
+   * Replace this RepresentationIndex by a newly downloaded one.
    * Check if the old index had more information about new segments and re-add
    * them if that's the case.
    * @param {Object} newIndex
    */
-  _update(newIndex : SmoothRepresentationIndex) : void {
+  _replace(newIndex : SmoothRepresentationIndex) : void {
     const oldTimeline = this._index.timeline;
     const newTimeline = newIndex._index.timeline;
     const oldTimescale = this._index.timescale;
@@ -483,7 +487,10 @@ export default class SmoothRepresentationIndex implements IRepresentationIndex {
     this._indexValidityTime = newIndex._indexValidityTime;
     this._scaledLiveGap = newIndex._scaledLiveGap;
 
-    if (!oldTimeline.length || !newTimeline.length || oldTimescale !== newTimescale) {
+    if (oldTimeline.length === 0 ||
+        newTimeline.length === 0 ||
+        oldTimescale !== newTimescale)
+    {
       return; // don't take risk, if something is off, take the new one
     }
 
@@ -529,6 +536,13 @@ export default class SmoothRepresentationIndex implements IRepresentationIndex {
         return;
       }
     }
+  }
+
+  _update(newIndex : SmoothRepresentationIndex) : void {
+    updateSegmentTimeline(this._index.timeline, newIndex._index.timeline);
+    this._initialScaledLastPosition = newIndex._initialScaledLastPosition;
+    this._indexValidityTime = newIndex._indexValidityTime;
+    this._scaledLiveGap = newIndex._scaledLiveGap;
   }
 
   /**

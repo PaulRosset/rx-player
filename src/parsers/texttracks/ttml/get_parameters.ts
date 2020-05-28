@@ -14,12 +14,17 @@
  * limitations under the License.
  */
 
-export interface ITTParameters {
-  frameRate : number;
-  subFrameRate : number;
-  tickRate : number;
-  spaceStyle: "default"|"preserve";
-}
+import log from "../../../log";
+import isNonEmptyString from "../../../utils/is_non_empty_string";
+
+const CELL_RESOLUTION_REGEXP = /(\d+) (\d+)/;
+
+export interface ITTParameters { frameRate : number;
+                                 subFrameRate : number;
+                                 tickRate : number;
+                                 spaceStyle: "default"|"preserve";
+                                 cellResolution : { columns : number;
+                                                    rows : number; }; }
 
 /**
  * Returns global parameters from a TTML Document
@@ -33,32 +38,59 @@ export default function getParameters(tt : Element) : ITTParameters {
   const parsedTickRate = tt.getAttribute("ttp:tickRate");
   const parsedFrameRateMultiplier = tt.getAttribute("ttp:frameRateMultiplier");
   const parsedSpaceStyle = tt.getAttribute("xml:space");
+  const parsedCellResolution = tt.getAttribute("ttp:cellResolution");
 
-  if (
-    parsedSpaceStyle && parsedSpaceStyle !== "default" &&
-    parsedSpaceStyle !== "preserve"
-  ) {
+  let cellResolution : { columns : number; rows : number } = { columns: 32,
+                                                               rows : 15 };
+  if (parsedCellResolution !== null) {
+    const extractedData = CELL_RESOLUTION_REGEXP.exec(parsedCellResolution);
+    if (extractedData === null || extractedData.length < 3) {
+      log.warn("TTML Parser: Invalid cellResolution");
+    } else {
+      const columns = parseInt(extractedData[1], 10);
+      const rows = parseInt(extractedData[2], 10);
+      if (isNaN(columns) || isNaN(rows)) {
+        log.warn("TTML Parser: Invalid cellResolution");
+      } else {
+        cellResolution = { columns, rows };
+      }
+    }
+
+  }
+
+  if (isNonEmptyString(parsedSpaceStyle) &&
+      parsedSpaceStyle !== "default" &&
+      parsedSpaceStyle !== "preserve")
+  {
     throw new Error("Invalid spacing style");
   }
 
-  const nbFrameRate = Number(parsedFrameRate) || 30;
-  const nbSubFrameRate = Number(parsedSubFrameRate) || 1;
-  const nbTickRate = Number(parsedTickRate) || 0;
-
-  let tickRate = nbTickRate;
-  let frameRate = nbFrameRate;
-  const subFrameRate = nbSubFrameRate != null ? nbSubFrameRate : 1;
-
-  // TypeScript too dumdum here :/
-  const spaceStyle = (parsedSpaceStyle || "default") as "default"|"preserve";
-
-  if (nbTickRate === 0) {
-    tickRate = parsedFrameRate ? nbFrameRate * nbSubFrameRate : 1;
+  let nbFrameRate = Number(parsedFrameRate);
+  if (isNaN(nbFrameRate) || nbFrameRate <= 0) {
+    nbFrameRate = 30;
+  }
+  let nbSubFrameRate = Number(parsedSubFrameRate);
+  if (isNaN(nbSubFrameRate) || nbSubFrameRate <= 0) {
+    nbSubFrameRate = 1;
+  }
+  let nbTickRate : number | undefined = Number(parsedTickRate);
+  if (isNaN(nbTickRate) || nbTickRate <= 0) {
+    nbTickRate = undefined;
   }
 
-  if (parsedFrameRateMultiplier) {
+  let frameRate = nbFrameRate;
+  const subFrameRate = nbSubFrameRate != null ? nbSubFrameRate :
+                                                1;
+
+  const spaceStyle = parsedSpaceStyle !== null ? parsedSpaceStyle :
+                                                 "default";
+
+  const tickRate = nbTickRate !== undefined ? nbTickRate :
+                                              nbFrameRate * nbSubFrameRate;
+
+  if (parsedFrameRateMultiplier  !== null) {
     const multiplierResults = /^(\d+) (\d+)$/g.exec(parsedFrameRateMultiplier);
-    if (multiplierResults) {
+    if (multiplierResults !== null) {
       const numerator = Number(multiplierResults[1]);
       const denominator = Number(multiplierResults[2]);
       const multiplierNum = numerator / denominator;
@@ -66,10 +98,9 @@ export default function getParameters(tt : Element) : ITTParameters {
     }
   }
 
-  return {
-    tickRate,
-    frameRate,
-    subFrameRate,
-    spaceStyle,
-  };
+  return { cellResolution,
+           tickRate,
+           frameRate,
+           subFrameRate,
+           spaceStyle };
 }

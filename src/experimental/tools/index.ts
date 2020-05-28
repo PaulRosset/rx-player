@@ -14,8 +14,16 @@
  * limitations under the License.
  */
 
+import ContentDownloader from "./ContentDownloader";
+import createMetaplaylist from "./createMetaplaylist";
 import mediaCapabilitiesProber from "./mediaCapabilitiesProber";
+import parseBifThumbnails from "./parseBIFThumbnails";
+import TextTrackRenderer from "./TextTrackRenderer";
 
 export {
-  mediaCapabilitiesProber
+  ContentDownloader,
+  createMetaplaylist,
+  mediaCapabilitiesProber,
+  parseBifThumbnails,
+  TextTrackRenderer,
 };

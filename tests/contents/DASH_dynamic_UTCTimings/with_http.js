@@ -8,6 +8,7 @@ const BASE_URL = "http://" +
 const manifestInfos = {
   url: BASE_URL + "Manifest_with_http.mpd",
   transport: "dash",
+  isDynamic: true,
   isLive: true,
   availabilityStartTime: 0,
   periods: [
@@ -25,7 +26,7 @@ const manifestInfos = {
                 mimeType: "audio/mp4",
                 index: {
                   init: {
-                    mediaURL: BASE_URL + "A48/init.mp4",
+                    mediaURLs: [BASE_URL + "A48/init.mp4"],
                   },
                   segments: [
                   ],
@@ -46,7 +47,7 @@ const manifestInfos = {
                 mimeType: "video/mp4",
                 index: {
                   init: {
-                    mediaURL: BASE_URL + "V300/init.mp4",
+                    mediaURLs: [BASE_URL + "V300/init.mp4"],
                   },
                   segments: [
                   ],

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import addClassName from "./add_class_name";
 import addTextTrack from "./add_text_track";
 import {
   ICompatMediaKeySystemAccess,
@@ -29,7 +30,6 @@ import tryToChangeSourceBufferType, {
 } from "./change_source_buffer_type";
 import clearElementSrc from "./clear_element_src";
 import {
-  createSession,
   CustomMediaKeySystemAccess,
   generateKeyRequest,
   getInitData,
@@ -51,12 +51,15 @@ import isOffline from "./is_offline";
 import isPlaybackStuck from "./is_playback_stuck";
 import isVTTCue from "./is_vtt_cue";
 import makeVTTCue from "./make_vtt_cue";
+import onHeightWidthChange from "./on_height_width_change";
 import patchWebkitSourceBuffer from "./patch_webkit_source_buffer";
 import play$ from "./play";
 import setElementSrc$ from "./set_element_src";
+import shouldReloadMediaSourceOnDecipherabilityUpdate from "./should_reload_media_source_on_decipherability_update";
 import shouldRenewMediaKeys from "./should_renew_media_keys";
 import shouldUnsetMediaKeys from "./should_unset_media_keys";
 import shouldValidateMetadata from "./should_validate_metadata";
+import shouldWaitForDataBeforeLoaded from "./should_wait_for_data_before_loaded";
 import whenLoadedMetadata$ from "./when_loaded_metadata";
 import whenMediaSourceOpen$ from "./when_media_source_open";
 
@@ -64,10 +67,10 @@ import whenMediaSourceOpen$ from "./when_media_source_open";
 patchWebkitSourceBuffer();
 
 export {
+  addClassName,
   addTextTrack,
   canPatchISOBMFFSegment,
   clearElementSrc,
-  createSession,
   CustomMediaKeySystemAccess,
   events,
   exitFullscreen,
@@ -89,14 +92,17 @@ export {
   isVTTCue,
   makeVTTCue,
   MediaSource_,
+  onHeightWidthChange,
   play$,
   requestFullscreen,
   requestMediaKeySystemAccess,
   setElementSrc$,
   setMediaKeys,
+  shouldReloadMediaSourceOnDecipherabilityUpdate,
   shouldRenewMediaKeys,
   shouldUnsetMediaKeys,
   shouldValidateMetadata,
+  shouldWaitForDataBeforeLoaded,
   tryToChangeSourceBufferType,
   VTTCue_,
   whenLoadedMetadata$,

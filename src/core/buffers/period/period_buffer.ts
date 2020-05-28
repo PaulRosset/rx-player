@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import objectAssign from "object-assign";
 import {
   BehaviorSubject,
   concat as observableConcat,
@@ -40,10 +39,11 @@ import Manifest, {
   Adaptation,
   Period,
 } from "../../../manifest";
+import objectAssign from "../../../utils/object_assign";
 import { getLeftSizeOfRange } from "../../../utils/ranges";
 import WeakMapMemory from "../../../utils/weak_map_memory";
 import ABRManager from "../../abr";
-import { SegmentPipelinesManager } from "../../pipelines";
+import { SegmentFetcherCreator } from "../../fetchers";
 import SourceBuffersStore, {
   IBufferType,
   ITextTrackSourceBufferOptions,
@@ -62,10 +62,9 @@ import getAdaptationSwitchStrategy from "./get_adaptation_switch_strategy";
 export interface IPeriodBufferClockTick {
   currentTime : number; // the current position we are in the video in s
   duration : number; // duration of the HTMLMediaElement
-  isLive : boolean; // If true, we're playing a live content
   isPaused: boolean; // If true, the player is on pause
-  liveGap? : number; // gap between the current position and the live edge of
-                     // the content. Not set for non-live contents
+  liveGap? : number; // gap between the current position and the edge of a
+                     // live content. Not set for non-live contents
   readyState : number; // readyState of the HTMLMediaElement
   speed : number; // playback rate at which the content plays
   stalled : object|null; // if set, the player is currently stalled
@@ -80,7 +79,7 @@ export interface IPeriodBufferArguments {
   content : { manifest : Manifest;
               period : Period; };
   garbageCollectors : WeakMapMemory<QueuedSourceBuffer<unknown>, Observable<never>>;
-  segmentPipelinesManager : SegmentPipelinesManager<any>;
+  segmentFetcherCreator : SegmentFetcherCreator<any>;
   sourceBuffersStore : SourceBuffersStore;
   options: { manualBitrateSwitchingMode : "seamless" | "direct";
              textTrackOptions? : ITextTrackSourceBufferOptions; };
@@ -103,7 +102,7 @@ export default function PeriodBuffer({
   clock$,
   content,
   garbageCollectors,
-  segmentPipelinesManager,
+  segmentFetcherCreator,
   sourceBuffersStore,
   options,
   wantedBufferAhead$,
@@ -115,16 +114,26 @@ export default function PeriodBuffer({
   const adaptation$ = new ReplaySubject<Adaptation|null>(1);
   return adaptation$.pipe(
     switchMap((adaptation) => {
-      if (adaptation == null) {
+      if (adaptation === null) {
         log.info(`Buffer: Set no ${bufferType} Adaptation`, period);
-        const previousQSourceBuffer = sourceBuffersStore.get(bufferType);
+        const sourceBufferStatus = sourceBuffersStore.getStatus(bufferType);
         let cleanBuffer$ : Observable<unknown>;
 
-        if (previousQSourceBuffer != null) {
+        if (sourceBufferStatus.type === "initialized") {
           log.info(`Buffer: Clearing previous ${bufferType} SourceBuffer`);
-          cleanBuffer$ = previousQSourceBuffer.removeBuffer(period.start,
-                                                            period.end || Infinity);
+          if (SourceBuffersStore.isNative(bufferType)) {
+            return clock$.pipe(map((tick) => {
+              return EVENTS.needsMediaSourceReload(period, tick);
+            }));
+          }
+          cleanBuffer$ = sourceBufferStatus.value
+            .removeBuffer(period.start,
+                          period.end == null ? Infinity :
+                                               period.end);
         } else {
+          if (sourceBufferStatus.type === "uninitialized") {
+            sourceBuffersStore.disableSourceBuffer(bufferType);
+          }
           cleanBuffer$ = observableOf(null);
         }
 
@@ -132,6 +141,14 @@ export default function PeriodBuffer({
           cleanBuffer$.pipe(mapTo(EVENTS.adaptationChange(bufferType, null, period))),
           createEmptyBuffer(clock$, wantedBufferAhead$, bufferType, { period })
         );
+      }
+
+      if (SourceBuffersStore.isNative(bufferType) &&
+          sourceBuffersStore.getStatus(bufferType).type === "disabled")
+      {
+        return clock$.pipe(map((tick) => {
+          return EVENTS.needsMediaSourceReload(period, tick);
+        }));
       }
 
       log.info(`Buffer: Updating ${bufferType} adaptation`, adaptation, period);
@@ -143,13 +160,12 @@ export default function PeriodBuffer({
                                                                 bufferType,
                                                                 adaptation,
                                                                 options);
-          const buffered = qSourceBuffer.getBufferedRanges();
-          const strategy = getAdaptationSwitchStrategy(buffered,
+          const strategy = getAdaptationSwitchStrategy(qSourceBuffer,
                                                        period,
-                                                       bufferType,
+                                                       adaptation,
                                                        tick);
           if (strategy.type === "needs-reload") {
-            return observableOf(EVENTS.needsMediaSourceReload(tick));
+            return observableOf(EVENTS.needsMediaSourceReload(period, tick));
           }
 
           const cleanBuffer$ = strategy.type === "clean-buffer" ?
@@ -161,9 +177,11 @@ export default function PeriodBuffer({
           const bufferGarbageCollector$ = garbageCollectors.get(qSourceBuffer);
           const adaptationBuffer$ = createAdaptationBuffer(adaptation, qSourceBuffer);
 
-          return observableConcat(cleanBuffer$,
-                                  observableMerge(adaptationBuffer$,
-                                                  bufferGarbageCollector$));
+          return sourceBuffersStore.waitForUsableSourceBuffers().pipe(mergeMap(() => {
+            return observableConcat(cleanBuffer$,
+                                    observableMerge(adaptationBuffer$,
+                                                    bufferGarbageCollector$));
+          }));
         }));
 
       return observableConcat<IPeriodBufferEvent>(
@@ -196,7 +214,7 @@ export default function PeriodBuffer({
                               content: { manifest, period, adaptation },
                               options,
                               queuedSourceBuffer: qSourceBuffer,
-                              segmentPipelinesManager,
+                              segmentFetcherCreator,
                               wantedBufferAhead$ })
     .pipe(catchError((error : unknown) => {
       // non native buffer should not impact the stability of the
@@ -232,10 +250,10 @@ function createOrReuseQueuedSourceBuffer<T>(
   adaptation : Adaptation,
   options: { textTrackOptions? : ITextTrackSourceBufferOptions }
 ) : QueuedSourceBuffer<T> {
-  const currentQSourceBuffer = sourceBuffersStore.get(bufferType);
-  if (currentQSourceBuffer != null) {
+  const sourceBufferStatus = sourceBuffersStore.getStatus(bufferType);
+  if (sourceBufferStatus.type === "initialized") {
     log.info("Buffer: Reusing a previous SourceBuffer for the type", bufferType);
-    return currentQSourceBuffer;
+    return sourceBufferStatus.value;
   }
   const codec = getFirstDeclaredMimeType(adaptation);
   const sbOptions = bufferType === "text" ?  options.textTrackOptions : undefined;
@@ -243,12 +261,15 @@ function createOrReuseQueuedSourceBuffer<T>(
 }
 
 /**
- * Get mimetype string of the first representation declared in the given
+ * Get mime-type string of the first representation declared in the given
  * adaptation.
  * @param {Adaptation} adaptation
  * @returns {string}
  */
 function getFirstDeclaredMimeType(adaptation : Adaptation) : string {
   const { representations } = adaptation;
-  return (representations[0] && representations[0].getMimeTypeString()) || "";
+  if (representations[0] == null) {
+    return "";
+  }
+  return representations[0].getMimeTypeString();
 }

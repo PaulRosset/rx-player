@@ -27,6 +27,7 @@ import MediaKeysInfosStore from "./media_keys_infos_store";
 /**
  * Clear EME ressources that should be cleared when the current content stops
  * its playback.
+ * @param {HTMLMediaElement} mediaElement
  * @returns {Observable}
  */
 export default function clearEMESession(
@@ -39,8 +40,10 @@ export default function clearEMESession(
     }
 
     const currentState = MediaKeysInfosStore.getState(mediaElement);
-    if (currentState && currentState.keySystemOptions.closeSessionsOnStop) {
-      return currentState.sessionsStore.closeAllSessions()
+    if (currentState != null &&
+        currentState.keySystemOptions.closeSessionsOnStop === true)
+    {
+      return currentState.loadedSessionsStore.closeAllSessions()
         .pipe(ignoreElements());
     }
     return EMPTY;

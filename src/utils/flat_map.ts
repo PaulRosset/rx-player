@@ -27,14 +27,18 @@ export default function flatMap<T, U>(
   /* tslint:disable no-unbound-method */
   if (typeof (Array.prototype as any).flatMap === "function") {
   /* tslint:enable no-unbound-method */
+    /* tslint:disable no-unsafe-any */
     return (originalArray as any).flatMap(fn);
+    /* tslint:enable no-unsafe-any */
   }
 
   return originalArray.reduce((acc : U[], arg : T) : U[] => {
-      const r = fn(arg);
-      if (Array.isArray(r)) {
-        return [...acc, ...r];
-      }
-      return [...acc, r];
-    }, []);
+    const r = fn(arg);
+    if (Array.isArray(r)) {
+      acc.push(...r);
+      return acc;
+    }
+    acc.push(r);
+    return acc;
+  }, []);
 }

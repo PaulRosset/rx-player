@@ -6,13 +6,14 @@ import React from "react";
  * @param {Object} props
  * @returns {Object}
  */
-export default ({
+function Select({
+  ariaLabel,
   className = "",
   onChange,
   selected,
   options = [],
   disabled,
-}) => {
+}) {
   const optionsEl = options.map((val, index) =>
     typeof val === "object" ?
       <option
@@ -27,22 +28,30 @@ export default ({
         value={index}
       >
         {val}
-      </option>
-  );
+      </option>);
 
   const selectEl = disabled ? (
-    <select value={selected} disabled="disabled" onChange={onChange}>
+    <select
+      aria-label={ariaLabel}
+      value={selected}
+      disabled="disabled"
+      onChange={onChange}
+    >
       {optionsEl}
     </select>
   ) : (
-    <select value={selected} onChange={onChange}>
+    <select
+      aria-label={ariaLabel}
+      value={selected}
+      onChange={onChange}
+    >
       {optionsEl}
-    </select>
-  );
+    </select>);
 
   return (
     <section className={"select " + className}>
       {selectEl}
-    </section>
-  );
-};
+    </section>);
+}
+
+export default React.memo(Select);

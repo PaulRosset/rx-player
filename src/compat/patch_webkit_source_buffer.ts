@@ -16,6 +16,7 @@
 
 import nextTick from "next-tick";
 import EventEmitter from "../utils/event_emitter";
+import isNode from "./is_node";
 
 type IWebKitSourceBufferConstructor = new() => IWebKitSourceBuffer;
 
@@ -27,20 +28,25 @@ interface IWebKitSourceBuffer { append(data : ArrayBuffer) : void;
 export default function patchWebkitSourceBuffer() {
   // old WebKit SourceBuffer implementation,
   // where a synchronous append is used instead of appendBuffer
-  if ((window as any).WebKitSourceBuffer &&
+  /* tslint:disable no-unsafe-any */
+  if (!isNode && (window as any).WebKitSourceBuffer != null &&
       !(window as any).WebKitSourceBuffer.prototype.addEventListener
   ) {
 
     const sourceBufferWebkitRef : IWebKitSourceBufferConstructor =
       (window as any).WebKitSourceBuffer;
     const sourceBufferWebkitProto = sourceBufferWebkitRef.prototype;
+  /* tslint:enable no-unsafe-any */
 
     for (const fnName in EventEmitter.prototype) {
       if (EventEmitter.prototype.hasOwnProperty(fnName)) {
+        /* tslint:disable no-unsafe-any */
         sourceBufferWebkitProto[fnName] = (EventEmitter.prototype as any)[fnName];
+        /* tslint:enable no-unsafe-any */
       }
     }
 
+    /* tslint:disable no-unsafe-any */
     sourceBufferWebkitProto._listeners = [];
 
     sourceBufferWebkitProto.__emitUpdate =
@@ -71,5 +77,6 @@ export default function patchWebkitSourceBuffer() {
         this.__emitUpdate("update");
         /* tslint:enable no-invalid-this */
       };
+    /* tslint:enable no-unsafe-any */
   }
 }

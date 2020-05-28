@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-import objectAssign from "object-assign";
+import objectAssign from "../../../../utils/object_assign";
 import { IParsedInitialization } from "./Initialization";
 import parseSegmentBase, {
   IParsedSegmentBase
 } from "./SegmentBase";
-import parseSegmentTimeline, {
-  IParsedTimeline,
+import createSegmentTimelineParser, {
+  ITimelineParser,
 } from "./SegmentTimeline";
 import {
   parseBoolean,
@@ -46,7 +46,7 @@ export interface IParsedSegmentTemplate extends IParsedSegmentBase {
 
 export interface IParsedSegmentTimeline {
   indexType: "timeline";
-  timeline: IParsedTimeline;
+  parseTimeline : ITimelineParser;
   availabilityTimeComplete : boolean;
   indexRangeExact : boolean;
   timescale : number;
@@ -84,15 +84,16 @@ export default function parseSegmentTemplate(
   let ret : IParsedSegmentTemplate|IParsedSegmentTimeline;
 
   let index : string|undefined;
+  let availabilityTimeOffset : string|undefined;
   let media : string|undefined;
   let bitstreamSwitching : boolean|undefined;
-  let timeline : IParsedTimeline|undefined;
+  let parseTimeline : ITimelineParser|undefined;
 
   for (let i = 0; i < root.childNodes.length; i++) {
     if (root.childNodes[i].nodeType === Node.ELEMENT_NODE) {
       const currentNode = root.childNodes[i] as Element;
       if (currentNode.nodeName === "SegmentTimeline") {
-        timeline = parseSegmentTimeline(currentNode);
+        parseTimeline = createSegmentTimelineParser(currentNode);
       }
     }
   }
@@ -112,6 +113,10 @@ export default function parseSegmentTemplate(
         index = attribute.value;
         break;
 
+      case "availabilityTimeOffset":
+        availabilityTimeOffset = attribute.value;
+        break;
+
       case "media":
         media = attribute.value;
         break;
@@ -122,10 +127,10 @@ export default function parseSegmentTemplate(
     }
   }
 
-  if (timeline != null) {
+  if (parseTimeline != null) {
     ret = objectAssign({}, base, {
       indexType: "timeline" as "timeline",
-      timeline,
+      parseTimeline,
     });
   } else {
     const segmentDuration = base.duration;
@@ -149,6 +154,12 @@ export default function parseSegmentTemplate(
 
   if (bitstreamSwitching != null) {
     ret.bitstreamSwitching = bitstreamSwitching;
+  }
+
+  if (availabilityTimeOffset != null) {
+    ret.availabilityTimeOffset =
+      availabilityTimeOffset === "INF" ? Infinity :
+                                         parseInt(availabilityTimeOffset, 10);
   }
 
   return ret;

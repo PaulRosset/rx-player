@@ -16,14 +16,20 @@
 
 import { ICustomError } from "../../errors";
 import Manifest, {
+  Adaptation,
   Period,
+  Representation,
 } from "../../manifest";
 import { IRepresentationChangeEvent } from "../buffers";
-import { IBufferType } from "../source_buffers";
+import SourceBuffersStore, {
+  IBufferType,
+} from "../source_buffers";
 import { IStallingItem } from "./get_stalled_events";
 import {
+  IDecipherabilityUpdateEvent,
   ILoadedEvent,
   IManifestReadyEvent,
+  IManifestUpdateEvent,
   IReloadingMediaSourceEvent,
   ISpeedChangedEvent,
   IStalledEvent,
@@ -34,8 +40,8 @@ import {
  * Construct a "loaded" event.
  * @returns {Object}
  */
-function loaded() : ILoadedEvent {
-  return { type: "loaded", value: true };
+function loaded(sourceBuffersStore : SourceBuffersStore | null) : ILoadedEvent {
+  return { type: "loaded", value: { sourceBuffersStore } };
 }
 
 /**
@@ -48,8 +54,21 @@ function stalled(stalling : IStallingItem|null) : IStalledEvent {
 }
 
 /**
+ * Construct a "decipherabilityUpdate" event.
+ * @param {Array.<Object>} arg
+ * @returns {Object}
+ */
+function decipherabilityUpdate(
+  arg : Array<{ manifest : Manifest;
+                period : Period;
+                adaptation : Adaptation;
+                representation : Representation; }>
+) : IDecipherabilityUpdateEvent {
+  return { type: "decipherabilityUpdate", value: arg };
+}
+
+/**
  * Construct a "manifestReady" event.
- * @param {Object} abrManager
  * @param {Object} manifest
  * @returns {Object}
  */
@@ -57,6 +76,14 @@ function manifestReady(
   manifest : Manifest
 ) : IManifestReadyEvent {
   return { type: "manifestReady", value: { manifest } };
+}
+
+/**
+ * Construct a "manifestUpdate" event.
+ * @returns {Object}
+ */
+function manifestUpdate() : IManifestUpdateEvent {
+  return { type: "manifestUpdate", value: null };
 }
 
 /**
@@ -85,20 +112,26 @@ function nullRepresentation(
 }
 
 /**
- * Construct a "warning" event.
- * @param {Error} value
- * @returns {Object}
+ * construct a "warning" event.
+ * @param {error} value
+ * @returns {object}
  */
 function warning(value : ICustomError) : IWarningEvent {
   return { type: "warning", value };
 }
 
+/**
+ * construct a "reloading-media-source" event.
+ * @returns {object}
+ */
 function reloadingMediaSource() : IReloadingMediaSourceEvent {
   return { type: "reloading-media-source", value: undefined };
 }
 
 const INIT_EVENTS = { loaded,
+                      decipherabilityUpdate,
                       manifestReady,
+                      manifestUpdate,
                       nullRepresentation,
                       reloadingMediaSource,
                       speedChanged,

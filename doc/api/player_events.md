@@ -6,7 +6,11 @@
 - [Overview](#overview)
 - [Events](#events)
     - [playerStateChange](#events-playerStateChange)
+    - [error](#events-error)
+    - [warning](#events-warning)
     - [positionUpdate](#events-positionUpdate)
+    - [seeking](#events-seeking)
+    - [seeked](#events-seeked)
     - [availableAudioTracksChange](#events-availableAudioTracksChange)
     - [availableTextTracksChange](#events-availableTextTracksChange)
     - [availableVideoTracksChange](#events-availableVideoTracksChange)
@@ -17,13 +21,12 @@
     - [availableVideoBitratesChange](#events-availableVideoBitratesChange)
     - [audioBitrateChange](#events-audioBitrateChange)
     - [videoBitrateChange](#events-videoBitrateChange)
-    - [imageTrackUpdate](#events-imageTrackUpdate)
-    - [fullscreenChange](#events-fullscreenChange)
     - [bitrateEstimationChange](#events-bitrateEstimationChange)
-    - [warning](#events-warning)
-    - [error](#events-error)
-    - [nativeTextTracksChange](#events-nativeTextTracksChange)
     - [periodChange](#events-periodChange)
+    - [decipherabilityUpdate](#events-decipherabilityUpdate)
+    - [imageTrackUpdate (deprecated)](#events-imageTrackUpdate)
+    - [fullscreenChange (deprecated)](#events-fullscreenChange)
+    - [nativeTextTracksChange (deprecated)](#events-nativeTextTracksChange)
 
 
 
@@ -65,6 +68,28 @@ As it is a central part of our API and can be difficult concept to understand,
 we have a special [page of documentation on player states](./states.md).
 
 
+<a name="events-error"></a>
+### error ######################################################################
+
+_payload type_: ``Error``
+
+Triggered each time a fatal (for content playback) error happened.
+
+The payload is the corresponding error. See [the Player Error
+documentation](./errors.md) for more information.
+
+
+<a name="events-warning"></a>
+### warning ####################################################################
+
+_payload type_: ``Error``
+
+Triggered each time a non-fatal (for content playback) error happened.
+
+The payload is the corresponding error. See [the Player Error
+documentation](./errors.md) for more information.
+
+
 <a name="events-positionUpdate"></a>
 ### positionUpdate #############################################################
 
@@ -90,16 +115,31 @@ The object emitted as the following properties:
   - ``maximumBufferTime`` (``Number|undefined``): The maximum time until which
     the buffer can currently be filled. That is:
 
-    - for non-live contents, the duration.
+    - for static contents (like VoD), the duration.
 
-    - for live contents, the live edge minus a security margin we added to avoid
-      buffering ahead of it.
+    - for dynamic contents (like live contents), the current maximum available
+      position (live edge for live contents) minus a security margin we added to
+      avoid buffering ahead of it.
 
   - ``wallClockTime`` (``Number|undefined``): Only for live contents. The
     current time converted to wall-clock time in seconds.
     That is the real live position (and not the position as announced by the
     video element).
 
+
+
+<a name="events-seeking"></a>
+### seeking #################################################
+
+Emitted when a "seek" operation (to "move"/"skip" to another position) begins
+on the currently loaded content.
+
+
+<a name="events-seeked"></a>
+### seeked #################################################
+
+Emitted when a "seek" operation (to "move"/"skip" to another position) on the
+currently loaded content has finished
 
 
 <a name="events-availableAudioTracksChange"></a>
@@ -109,15 +149,13 @@ _payload type_: ``Array.<Object>``
 
 ---
 
-:warning: This event is not sent in _DirectFile_ mode (see [loadVideo
-options](./loadVideo_options.md#prop-transport)).
-
----
-
 Triggered when the currently available audio tracks change (e.g.: at the
 beginning of the content, when period changes...).
 
 The array emitted contains object describing each available audio track:
+
+  - ``active`` (``Boolean``): Whether the track is the one currently active or
+    not.
 
   - ``id`` (``string``): The id used to identify the track. Use it for
     setting the track via ``setAudioTrack``.
@@ -134,20 +172,19 @@ The array emitted contains object describing each available audio track:
   - ``audioDescription`` (``Boolean``): Whether the track is an audio
     description (for the visually impaired or not).
 
-  - ``active`` (``Boolean``): Whether the track is the one currently active or
-    not.
+  - ``dub`` (``Boolean|undefined``): If set to `true`, this audio track is a
+    "dub", meaning it was recorded in another language than the original.
+    If set to `false`, we know that this audio track is in an original language.
+    This property is `undefined` if we do not known whether it is in an original
+    language.
 
+This event only concerns the currently-playing Period.
 
 
 <a name="events-availableVideoTracksChange"></a>
 ### availableVideoTracksChange #################################################
 
 _payload type_: ``Array.<Object>``
-
----
-
-:warning: This event is not sent in _DirectFile_ mode (see [loadVideo
-options](./loadVideo_options.md#prop-transport)).
 
 ---
 
@@ -180,17 +217,14 @@ The array emitted contains object describing each available video track:
 
     - ``frameRate`` (``string|undefined``): The video framerate.
 
+This event only concerns the currently-playing Period.
 
 
-<a name="events-availableVideoTracksChange"></a>
+
+<a name="events-availableTextTracksChange"></a>
 ### availableTextTracksChange ##################################################
 
 _payload type_: ``Array.<Object>``
-
----
-
-:warning: This event is not sent in _DirectFile_ mode (see [loadVideo
-options](./loadVideo_options.md#prop-transport)).
 
 ---
 
@@ -217,17 +251,14 @@ The array emitted contains object describing each available text track:
   - ``active`` (``Boolean``): Whether the track is the one currently active or
     not.
 
+This event only concerns the currently-playing Period.
+
 
 
 <a name="events-audioTrackChange"></a>
 ### audioTrackChange ###########################################################
 
 _payload type_: ``Object|null``
-
----
-
-:warning: This event is not sent in _DirectFile_ mode (see [loadVideo
-options](./loadVideo_options.md#prop-transport)).
 
 ---
 
@@ -240,17 +271,19 @@ properties:
   - ``language`` (``string``): The language the audio track is in.
   - ``audioDescription`` (``Boolean``): Whether the track is an audio
     description (for the visually impaired or not).
+  - ``dub`` (``Boolean|undefined``): If set to `true`, this audio track is a
+    "dub", meaning it was recorded in another language than the original.
+    If set to `false`, we know that this audio track is in an original language.
+    This property is `undefined` if we do not known whether it is in an original
+    language.
+
+This event only concerns the currently-playing Period.
 
 
 <a name="events-textTrackChange"></a>
 ### textTrackChange ############################################################
 
 _payload type_: ``Object|null``
-
----
-
-:warning: This event is not sent in _DirectFile_ mode (see [loadVideo
-options](./loadVideo_options.md#prop-transport)).
 
 ---
 
@@ -264,16 +297,13 @@ properties:
   - ``closedCaption`` (``Boolean``): Whether the track is specially adapted for
     the hard of hearing or not.
 
+This event only concerns the currently-playing Period.
+
 
 <a name="events-videoTrackChange"></a>
 ### videoTrackChange ############################################################
 
 _payload type_: ``Object|null``
-
----
-
-:warning: This event is not sent in _DirectFile_ mode (see [loadVideo
-options](./loadVideo_options.md#prop-transport)).
 
 ---
 
@@ -305,7 +335,15 @@ properties:
 
     - ``frameRate`` (``string|undefined``): The video framerate.
 
+A `null` payload means that video track has been disabled.
 
+This event only concerns the currently-playing Period.
+
+:warning: In _DirectFile_ mode, a `null` payload may be received even if the
+video track is still visually active.
+This seems due to difficult-to-detect browser bugs. We recommend not disabling
+the video track when in directfile mode to avoid that case (this is documented
+in the corresponding APIs).
 
 <a name="events-availableAudioBitratesChange"></a>
 ### availableAudioBitratesChange ###############################################
@@ -325,6 +363,8 @@ changes...).
 
 The payload is an array of the different bitrates available, in bits per
 seconds.
+
+This event only concerns the currently-playing Period.
 
 
 <a name="events-availableVideoBitratesChange"></a>
@@ -346,6 +386,8 @@ changes...).
 The payload is an array of the different bitrates available, in bits per
 seconds.
 
+This event only concerns the currently-playing Period.
+
 
 <a name="events-audioBitrateChange"></a>
 ### audioBitrateChange #########################################################
@@ -363,6 +405,8 @@ The payload is the new audio bitrate, in bits per seconds. It is emitted every
 time it changes (based on the last received segment).
 
 `-1` when the bitrate is not known.
+
+This event only concerns the currently-playing Period.
 
 
 <a name="events-videoBitrateChange"></a>
@@ -382,9 +426,112 @@ time it changes (based on the last received segment).
 
 `-1` when the bitrate is not known.
 
+This event only concerns the currently-playing Period.
+
+
+<a name="events-bitrateEstimationChange"></a>
+### bitrateEstimationChange ####################################################
+
+_payload type_: ``Object``
+
+---
+
+:warning: This event is not sent in _DirectFile_ mode (see [loadVideo
+options](./loadVideo_options.md#prop-transport)).
+
+---
+
+Information about the last bitrate estimation performed, by type of buffer
+(``audio``, ``video`` etc.).
+
+Note that this event is sent only if the corresponding buffer type has multiple
+[Representations](../terms.md#representation) for the given content (as bitrate
+estimations are only useful in that case).
+
+The payload is an object with the following properties:
+
+  - ``type`` (``string``): The buffer type
+
+  - ``bitrate`` (``Number``): The last estimated bandwidth for this buffer type,
+    in bits per seconds.
+    This bitrate is smoothed by doing a (complex) mean on an extended period of
+    time, so it often does not link directly to the current calculated bitrate.
+
+
+
+<a name="events-periodChange"></a>
+### periodChange ###############################################################
+
+_payload type_: ``Object``
+
+---
+
+:warning: This event is not sent in _DirectFile_ mode (see [loadVideo
+options](./loadVideo_options.md#prop-transport)).
+
+---
+
+Triggered when the current [Period](../terms.md#period) being seen changes.
+
+The payload is the corresponding Period. See [the Manifest
+documentation](./manifest.md#period) for more information.
+
+
+<a name="events-decipherabilityUpdate"></a>
+### decipherabilityUpdate ######################################################
+
+_payload type_: ``Array.<Object>``
+
+---
+
+:warning: This event is not sent in _DirectFile_ mode (see [loadVideo
+options](./loadVideo_options.md#prop-transport)).
+
+---
+
+Triggered when a or multiple Representation's decipherability status were
+updated. Which means either:
+  - A Representation is found to be undecipherable (e.g. the key or license
+    request is refused)
+  - A Representation is found to be decipherable
+  - A Representation's decipherability becomes undefined
+
+At this time, this event is only triggered if:
+  - the current content is an encrypted content
+  - Either the `fallbackOnLastTry` property was set to `true` on a rejected
+    `getLicense` call or one of the `fallbackOn` properties was set to true in
+    the `keySystems` loadVideo option.
+
+Following this event, the RxPlayer might remove from the current buffers any
+data linked to undecipherable Representation(s) (the video might twitch a little
+or reload) and update the list of available bitrates.
+
+The payload of this event is an Array of objects, each representating a
+Representation whose decipherability's status has been updated.
+
+Each of those objects have the following properties:
+  - `representation`: The Representation concerned (more information on its
+    structure [in the Manifest documentation](./manifest.md#representation)).
+  - `adaptation`: The Adaptation linked to that Representation (more information
+    on its structure [in the Manifest documentation](./manifest.md#adaptation)).
+  - `period`: The Period linked to that Representation (more information on its
+    structure [in the Manifest documentation](./manifest.md#period)).
+  - `manifest`: The current Manifest (more information on its structure [in the
+    Manifest documentation](./manifest.md#manifest)).
+
+You can then know if any of those Representations are becoming decipherable or
+not through their `decipherable` property.
+
 
 <a name="events-imageTrackUpdate"></a>
 ### imageTrackUpdate ###########################################################
+
+---
+
+:warning: This event is deprecated, it will disappear in the next major
+release ``v4.0.0`` (see [Deprecated APIs](./deprecated.md)).
+
+---
 
 _payload type_: ``Object``
 
@@ -422,58 +569,6 @@ The payload is ``true`` if the player entered fullscreen, ``false`` if it exited
 it.
 
 
-<a name="events-bitrateEstimationChange"></a>
-### bitrateEstimationChange ####################################################
-
-_payload type_: ``Object``
-
----
-
-:warning: This event is not sent in _DirectFile_ mode (see [loadVideo
-options](./loadVideo_options.md#prop-transport)).
-
----
-
-Information about the last bitrate estimation performed, by type of buffer
-(``audio``, ``video`` etc.).
-
-Note that this event is sent only if the corresponding buffer type has multiple
-[Representations](../terms.md#representation) for the given content (as bitrate
-estimations are only useful in that case).
-
-The payload is an object with the following properties:
-
-  - ``type`` (``string``): The buffer type
-
-  - ``bitrate`` (``Number``): The last estimated bandwidth for this buffer type,
-    in bits per seconds.
-    This bitrate is smoothed by doing a (complex) mean on an extended period of
-    time, so it often does not link directly to the current calculated bitrate.
-
-
-
-<a name="events-warning"></a>
-### warning ####################################################################
-
-_payload type_: ``Error``
-
-Triggered each time a non-fatal (for content playback) error happened.
-
-The payload is the corresponding error. See [the Player Error
-documentation](./errors.md) for more information.
-
-
-<a name="events-error"></a>
-### error ######################################################################
-
-_payload type_: ``Error``
-
-Triggered each time a fatal (for content playback) error happened.
-
-The payload is the corresponding error. See [the Player Error
-documentation](./errors.md) for more information.
-
-
 <a name="events-nativeTextTracksChange"></a>
 ### nativeTextTracksChange #####################################################
 
@@ -484,7 +579,7 @@ release ``v4.0.0`` (see [Deprecated APIs](./deprecated.md)).
 
 ---
 
-_payload type_: ``Array<TextTrackElement>``
+_payload type_: ``Array.<TextTrackElement>``
 
 ---
 
@@ -498,21 +593,3 @@ element.
 
 The payload is the array of ``TextTrack`` elements. The RxPlayer will only set
 a single ``<track>`` when a text track is set.
-
-
-<a name="events-periodChange"></a>
-### periodChange ###############################################################
-
-_payload type_: ``Object``
-
----
-
-:warning: This event is not sent in _DirectFile_ mode (see [loadVideo
-options](./loadVideo_options.md#prop-transport)).
-
----
-
-Triggered when the current [Period](../terms.md#period) being seen changes.
-
-The payload is the corresponding Period. See [the Manifest
-documentation](./manifest.md#period) for more information.

@@ -20,14 +20,8 @@ export interface IIndexSegment { start : number;
                                  duration : number;
                                  repeatCount: number; }
 
-export interface ITimelineIndex { presentationTimeOffset? : number;
-                                  timescale : number;
-                                  media : string;
-                                  timeline : IIndexSegment[];
-                                  startNumber? : number;
-                                  isLive : boolean;
-                                  timeShiftBufferDepth? : number;
-                                  manifestReceivedTime? : number; }
+export interface ITimelineIndex { timescale : number;
+                                  timeline : IIndexSegment[]; }
 
 /**
  * Add a new segment to the index.
@@ -59,7 +53,7 @@ export default function _addSegmentInfos(
 
   let scaledCurrentTime;
 
-  if (currentSegment && currentSegment.timescale) {
+  if (currentSegment.timescale !== 0) {
     scaledCurrentTime = currentSegment.timescale === timescale ?
       currentSegment.time :
       (currentSegment.time / currentSegment.timescale) * timescale;

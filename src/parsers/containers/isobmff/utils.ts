@@ -146,11 +146,11 @@ function getSegmentsFromSidx(
     const refChunk = be4toi(buf, pos);
     pos += 4;
     const refType = (refChunk & 0x80000000) >>> 31;
-    const refSize = (refChunk & 0x7fffffff);
+    const refSize = (refChunk & 0x7FFFFFFF);
 
     // when set to 1 indicates that the reference is to a sidx, else to media
     if (refType === 1) {
-      throw new Error("not implemented");
+      throw new Error("sidx with reference_type `1` not yet implemented");
     }
 
     const duration = be4toi(buf, pos);
@@ -164,13 +164,11 @@ function getSegmentsFromSidx(
     // let sapType = (sapChunk & 0x70000000) >>> 28;
     // let sapDelta = sapChunk & 0x0FFFFFFF;
 
-    segments.push({
-      time,
-      duration,
-      count: 0,
-      timescale,
-      range: [offset, offset + refSize - 1],
-    });
+    segments.push({ time,
+                    duration,
+                    count: 0,
+                    timescale,
+                    range: [offset, offset + refSize - 1] });
 
     time += duration;
     offset += refSize;
@@ -189,7 +187,7 @@ function getSegmentsFromSidx(
  */
 function getTrackFragmentDecodeTime(buffer : Uint8Array) : number {
   const traf = getTRAF(buffer);
-  if (!traf) {
+  if (traf === null) {
     return -1;
   }
 
@@ -204,7 +202,8 @@ function getTrackFragmentDecodeTime(buffer : Uint8Array) : number {
     return -1;
   }
 
-  return version ? be8toi(traf, pos) : be4toi(traf, pos);
+  return version !== 0 ? be8toi(traf, pos) :
+                         be4toi(traf, pos);
 }
 
 /**
@@ -225,17 +224,17 @@ function getDefaultDurationFromTFHDInTRAF(traf : Uint8Array) : number {
   const hasSampleDescriptionIndex = flags & 0x000002;
   const hasDefaultSampleDuration = flags & 0x000008;
 
-  if (!hasDefaultSampleDuration) {
+  if (hasDefaultSampleDuration === 0) {
     return -1;
   }
 
   pos += 4;
 
-  if (hasBaseDataOffset) {
+  if (hasBaseDataOffset !== 0) {
     pos += 8;
   }
 
-  if (hasSampleDescriptionIndex) {
+  if (hasSampleDescriptionIndex !== 0) {
     pos += 4;
   }
 
@@ -250,11 +249,11 @@ function getDefaultDurationFromTFHDInTRAF(traf : Uint8Array) : number {
  */
 function getDurationFromTrun(buffer : Uint8Array) : number {
   const traf = getTRAF(buffer);
-  if (!traf) {
+  if (traf === null) {
     return -1;
   }
 
-  const index = findBox(traf, 0x7472756e /* trun */);
+  const index = findBox(traf, 0x7472756E /* trun */);
   if (index === -1) {
     return -1;
   }
@@ -268,7 +267,7 @@ function getDurationFromTrun(buffer : Uint8Array) : number {
   const hasSampleDuration = flags & 0x000100;
 
   let defaultDuration = 0;
-  if (!hasSampleDuration) {
+  if (hasSampleDuration === 0) {
     defaultDuration = getDefaultDurationFromTFHDInTRAF(traf);
     if (defaultDuration < 0) {
       return -1;
@@ -283,30 +282,30 @@ function getDurationFromTrun(buffer : Uint8Array) : number {
 
   const sampleCounts = be4toi(traf, pos); pos += 4;
 
-  if (hasDataOffset) {
+  if (hasDataOffset !== 0) {
     pos += 4;
   }
 
-  if (hasFirstSampleFlags) {
+  if (hasFirstSampleFlags !== 0) {
     pos += 4;
   }
 
   let i = sampleCounts;
   let duration = 0;
-  while (i--) {
-    if (hasSampleDuration) {
+  while (i-- > 0) {
+    if (hasSampleDuration !== 0) {
       duration += be4toi(traf, pos);
       pos += 4;
     } else {
       duration += defaultDuration;
     }
-    if (hasSampleSize) {
+    if (hasSampleSize !== 0) {
       pos += 4;
     }
-    if (hasSampleFlags) {
+    if (hasSampleFlags !== 0) {
       pos += 4;
     }
-    if (hasSampleCompositionOffset) {
+    if (hasSampleCompositionOffset !== 0) {
       pos += 4;
     }
   }
@@ -324,11 +323,11 @@ function getDurationFromTrun(buffer : Uint8Array) : number {
  */
 function getMDHDTimescale(buffer : Uint8Array) : number {
   const mdia = getMDIA(buffer);
-  if (!mdia) {
+  if (mdia === null) {
     return -1;
   }
 
-  const index = findBox(mdia, 0x6d646864  /* "mdhd" */);
+  const index = findBox(mdia, 0x6D646864  /* "mdhd" */);
   if (index === -1) {
     return -1;
   }
@@ -380,11 +379,11 @@ function createPssh({ systemId, privateData } : IISOBMFFKeySystem) : Uint8Array 
  * @returns {Uint8Array} - The new ISOBMFF generated.
  */
 function patchPssh(buf : Uint8Array, pssList : IISOBMFFKeySystem[]) : Uint8Array {
-  if (!pssList || !pssList.length) {
+  if (pssList == null || pssList.length === 0) {
     return buf;
   }
 
-  const pos = findBox(buf, 0x6d6f6f76 /* = "moov" */);
+  const pos = findBox(buf, 0x6D6F6F76 /* = "moov" */);
   if (pos === -1) {
     return buf;
   }

@@ -16,7 +16,10 @@
 
 import log from "../../../log";
 import arrayIncludes from "../../../utils/array_includes";
-import { IParsedManifest } from "../types";
+import {
+  IParsedAdaptationType,
+  IParsedManifest,
+} from "../types";
 
 /**
  * Ensure that no two periods, adaptations from the same period and
@@ -43,8 +46,12 @@ export default function checkManifestIDs(
     }
     const { adaptations } = period;
     const adaptationIDs : string[] = [];
-    Object.keys(adaptations).forEach((type) => {
-      (adaptations[type] || []).forEach(adaptation => {
+    (Object.keys(adaptations) as IParsedAdaptationType[]).forEach((type) => {
+      const adaptationsForType = adaptations[type];
+      if (adaptationsForType === undefined) {
+        return;
+      }
+      adaptationsForType.forEach(adaptation => {
         const adaptationID = adaptation.id;
         if (arrayIncludes(adaptationIDs, adaptationID)) {
           log.warn("Two adaptations with the same ID found. Updating.",

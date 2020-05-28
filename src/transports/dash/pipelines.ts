@@ -18,7 +18,7 @@ import {
   ITransportOptions,
   ITransportPipelines,
 } from "../types";
-import generateManifestLoader from "../utils/document_manifest_loader";
+import generateManifestLoader from "../utils/text_manifest_loader";
 import {
   imageLoader,
   imageParser,
@@ -40,9 +40,8 @@ export default function(options : ITransportOptions) : ITransportPipelines {
     customManifestLoader: options.manifestLoader,
   });
   const manifestParser = generateManifestParser(options);
-  const segmentLoader = generateSegmentLoader(options.lowLatencyMode,
-                                              options.segmentLoader);
-  const textTrackLoader = generateTextTrackLoader(options.lowLatencyMode);
+  const segmentLoader = generateSegmentLoader(options);
+  const textTrackLoader = generateTextTrackLoader(options);
 
   return { manifest: { loader: manifestLoader,
                        parser: manifestParser },

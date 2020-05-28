@@ -28,6 +28,7 @@ import Manifest from "../../manifest";
 import dashManifestParser, {
   IMPDParserResponse,
 } from "../../parsers/manifest/dash";
+import objectAssign from "../../utils/object_assign";
 import request from "../../utils/request";
 import {
   ILoaderDataLoadedValue,
@@ -52,15 +53,16 @@ function requestStringResource(
   );
 }
 
+/**
+ * @param {Object} options
+ * @returns {Function}
+ */
 export default function generateManifestParser(
   options : ITransportOptions
 ) : (x : IManifestParserArguments) => IManifestParserObservable {
-  const { aggressiveMode: _aggressiveMode,
-          lowLatencyMode,
+  const { aggressiveMode,
           referenceDateTime } = options;
-  const aggressiveMode = lowLatencyMode ? _aggressiveMode !== false :
-                                          _aggressiveMode === true;
-  const serverTimeOffset = options.serverSyncInfos != null ?
+  const serverTimeOffset = options.serverSyncInfos !== undefined ?
     options.serverSyncInfos.serverTimestamp - options.serverSyncInfos.clientTime :
     undefined;
   return function manifestParser(
@@ -69,17 +71,19 @@ export default function generateManifestParser(
     const { response, scheduleRequest } = args;
     const argClockOffset = args.externalClockOffset;
     const loaderURL = args.url;
-    const url = response.url == null ? loaderURL :
-                                       response.url;
+    const url = response.url ?? loaderURL;
     const data = typeof response.responseData === "string" ?
                    new DOMParser().parseFromString(response.responseData,
                                                    "text/xml") :
                    // TODO find a way to check if Document?
                    response.responseData as Document;
 
-    const externalClockOffset = serverTimeOffset == null ? argClockOffset :
-                                                           serverTimeOffset;
-    const parsedManifest = dashManifestParser(data, { aggressiveMode,
+    const externalClockOffset = serverTimeOffset ?? argClockOffset;
+    const unsafelyBaseOnPreviousManifest = args.unsafeMode ? args.previousManifest :
+                                                             null;
+    const parsedManifest = dashManifestParser(data, { aggressiveMode:
+                                                        aggressiveMode === true,
+                                                      unsafelyBaseOnPreviousManifest,
                                                       url,
                                                       referenceDateTime,
                                                       externalClockOffset });
@@ -100,13 +104,17 @@ export default function generateManifestParser(
 
       return observableCombineLatest(externalResources$)
         .pipe(mergeMap(loadedResources => {
-          const resourceData = loadedResources.map(r => {
-            if (typeof r.responseData !== "string") {
+          const resources : Array<ILoaderDataLoadedValue<string>> = [];
+          for (let i = 0; i < loadedResources.length; i++) {
+            const resource = loadedResources[i];
+            if (typeof resource.responseData !== "string") {
               throw new Error("External DASH resources should only be strings");
             }
-            return r.responseData;
-          });
-          return loadExternalResources(continueParsing(resourceData));
+            // Normally not needed but TypeScript is just dumb here
+            resources.push(objectAssign(resource,
+                                        { responseData: resource.responseData }));
+          }
+          return loadExternalResources(continueParsing(resources));
         }));
     }
   };

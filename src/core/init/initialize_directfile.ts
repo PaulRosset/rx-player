@@ -20,7 +20,7 @@
  */
 
 import {
-  asapScheduler,
+  EMPTY,
   merge as observableMerge,
   Observable,
   of as observableOf,
@@ -31,7 +31,6 @@ import {
   map,
   mergeMap,
   mergeMapTo,
-  observeOn,
   share,
   take,
 } from "rxjs/operators";
@@ -41,11 +40,14 @@ import {
 } from "../../compat";
 import { MediaError } from "../../errors";
 import log from "../../log";
+import deferSubscriptions from "../../utils/defer_subscriptions";
 import {
   IEMEManagerEvent,
   IKeySystemOption,
 } from "../eme";
-import createEMEManager, { IEMEDisabledEvent } from "./create_eme_manager";
+import createEMEManager, {
+  IEMEDisabledEvent,
+} from "./create_eme_manager";
 import EVENTS from "./events_generators";
 import { IInitialTimeOptions } from "./get_initial_time";
 import getStalledEvents from "./get_stalled_events";
@@ -71,7 +73,7 @@ function getDirectFileInitialTime(
   mediaElement : HTMLMediaElement,
   startAt? : IInitialTimeOptions
 ) : number {
-  if (!startAt) {
+  if (startAt == null) {
     return 0;
   }
 
@@ -84,13 +86,13 @@ function getDirectFileInitialTime(
   }
 
   const duration = mediaElement.duration;
-  if (!duration || !isFinite(duration)) {
+  if (duration == null || !isFinite(duration)) {
     log.warn("startAt.fromLastPosition set but no known duration, " +
              "beginning at 0.");
     return 0;
   }
 
-  if (startAt.fromLastPosition) {
+  if (typeof startAt.fromLastPosition === "number") {
     return Math.max(0, duration + startAt.fromLastPosition);
   } else if (startAt.percentage != null) {
     const { percentage } = startAt;
@@ -151,14 +153,17 @@ export default function initializeDirectfileContent({
   const initialTime = () => getDirectFileInitialTime(mediaElement, startAt);
   log.debug("Init: Initial time calculated:", initialTime);
 
-  const { seek$, load$ } =
-    seekAndLoadOnMediaEvents(clock$, mediaElement, initialTime, autoPlay);
+  const { seek$, load$ } = seekAndLoadOnMediaEvents({ clock$,
+                                                      mediaElement,
+                                                      startTime: initialTime,
+                                                      mustAutoPlay: autoPlay,
+                                                      isDirectfile: true });
 
   // Create EME Manager, an observable which will manage every EME-related
   // issue.
   const emeManager$ = linkURL$.pipe(
-    mergeMap(() => createEMEManager(mediaElement, keySystems)),
-    observeOn(asapScheduler), // multiple Observables here are based on this one
+    mergeMap(() => createEMEManager(mediaElement, keySystems, EMPTY)),
+    deferSubscriptions(),
     share()
   );
 
@@ -174,7 +179,7 @@ export default function initializeDirectfileContent({
 
   // Create Stalling Manager, an observable which will try to get out of
   // various infinite stalling issues
-  const stalled$ = getStalledEvents(mediaElement, clock$)
+  const stalled$ = getStalledEvents(clock$)
     .pipe(map(EVENTS.stalled));
 
   // Manage "loaded" event and warn if autoplay is blocked on the current browser
@@ -187,14 +192,14 @@ export default function initializeDirectfileContent({
         const error = new MediaError("MEDIA_ERR_BLOCKED_AUTOPLAY",
                                      "Cannot trigger auto-play automatically: " +
                                      "your browser does not allow it.");
-        return observableOf(EVENTS.warning(error), EVENTS.loaded());
+        return observableOf(EVENTS.warning(error), EVENTS.loaded(null));
       } else if (evt === "not-loaded-metadata") {
         const error = new MediaError("MEDIA_ERR_NOT_LOADED_METADATA",
                                      "Cannot load automatically: your browser " +
                                      "falsely announced having loaded the content.");
         return observableOf(EVENTS.warning(error));
       }
-      return observableOf(EVENTS.loaded());
+      return observableOf(EVENTS.loaded(null));
     }));
 
   const initialSeek$ = seek$.pipe(ignoreElements());

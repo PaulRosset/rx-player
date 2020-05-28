@@ -11,10 +11,8 @@ import { Subject } from "rxjs";
 import { takeUntil } from "rxjs/operators";
 import $handleCatchUpMode from "./catchUp";
 
-const RxPlayer = window.RxPlayer;
-
 const PLAYER = ({ $destroy, state }, { videoElement, textTrackElement }) => {
-  const player = new RxPlayer({
+  const player = new window.RxPlayer({
     limitVideoWidth: false,
     stopAtEnd: false,
     throttleVideoBitrateWhenHidden: true,
@@ -26,24 +24,26 @@ const PLAYER = ({ $destroy, state }, { videoElement, textTrackElement }) => {
 
   // initial state. Written here to easily showcase it exhaustively
   state.set({
-    audioBitrateAuto: true,
     audioBitrate: undefined,
+    audioBitrateAuto: true,
+    autoPlayBlocked: false,
     availableAudioBitrates: [],
     availableLanguages: [],
+    availableSubtitles: [],
     availableVideoBitrates: [],
     availableVideoTracks: [],
-    availableSubtitles: [],
     bufferGap: undefined,
+    bufferedData: null,
     cannotLoadMetadata: false,
     currentTime: undefined,
     duration: undefined,
     error: null,
-    hasEnded: false,
     hasCurrentContent: false,
-    isCatchingUp: false,
-    isCatchUpEnabled: false,
+    hasEnded: false,
     images: [],
     isBuffering: false,
+    isCatchUpEnabled: false,
+    isCatchingUp: false,
     isContentLoaded: false,
     isLive: false,
     isLoading: false,
@@ -52,18 +52,18 @@ const PLAYER = ({ $destroy, state }, { videoElement, textTrackElement }) => {
     isSeeking: false,
     isStopped: true,
     language: undefined,
-    lowLatencyMode: false,
-    videoTrackId: undefined,
+    liveGap: undefined,
     loadedVideo: null,
-    minimumPosition: undefined,
+    lowLatencyMode: false,
     maximumPosition: undefined,
+    minimumPosition: undefined,
     playbackRate: player.getPlaybackRate(),
     subtitle: undefined,
-    videoBitrateAuto: true,
     videoBitrate: undefined,
+    videoBitrateAuto: true,
+    videoTrackId: undefined,
     volume: player.getVolume(),
     wallClockDiff: undefined,
-    liveGap: undefined,
   });
 
   linkPlayerEventsToState(player, state, $destroy);
@@ -90,6 +90,7 @@ const PLAYER = ({ $destroy, state }, { videoElement, textTrackElement }) => {
           offlineRetry: Infinity,
         },
         manualBitrateSwitchingMode: "direct",
+        transportOptions: { checkMediaSegmentIntegrity: true },
       }, arg));
       state.set({
         loadedVideo: arg,
@@ -145,8 +146,12 @@ const PLAYER = ({ $destroy, state }, { videoElement, textTrackElement }) => {
       player.setAudioTrack(track.id);
     },
 
-    ET_VIDEO_TRACK: (track) => {
+    SET_VIDEO_TRACK: (track) => {
       player.setVideoTrack(track.id);
+    },
+
+    DISABLE_VIDEO_TRACK: () => {
+      player.disableVideoTrack();
     },
 
     SET_SUBTITLES_TRACK: (track) => {

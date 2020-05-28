@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
+import config from "../../../config";
+import Manifest from "../../../manifest";
 import arrayFind from "../../../utils/array_find";
-import idGenerator from "../../../utils/id_generator";
-import resolveURL, {
-  normalizeBaseURL,
-} from "../../../utils/resolve_url";
+import { normalizeBaseURL } from "../../../utils/resolve_url";
 import { IParsedManifest } from "../types";
-import checkManifestIDs from "../utils/check_manifest_ids";
+import extractMinimumAvailabilityTimeOffset from "./extract_minimum_availability_time_offset";
 import getClockOffset from "./get_clock_offset";
 import getHTTPUTCTimingURL from "./get_http_utc-timing_url";
 import getMinimumAndMaximumPosition from "./get_minimum_and_maximum_positions";
@@ -33,24 +32,49 @@ import {
   IPeriodIntermediateRepresentation,
 } from "./node_parsers/Period";
 import parseAvailabilityStartTime from "./parse_availability_start_time";
-import parseDuration from "./parse_duration";
-import parsePeriods from "./parse_periods";
+import parsePeriods, {
+  IXLinkInfos,
+} from "./parse_periods";
+import resolveBaseURLs from "./resolve_base_urls";
 
-const generateManifestID = idGenerator();
+const { DASH_FALLBACK_LIFETIME_WHEN_MINIMUM_UPDATE_PERIOD_EQUAL_0 } = config;
 
+/** Possible options for `parseMPD`.  */
 export interface IMPDParserArguments {
-  aggressiveMode : boolean; // Whether we should request new segments even if
-                            // they are not yet finished
-  externalClockOffset? : number; // If set, offset to add to `performance.now()`
-                                 // to obtain the current server's time
-  referenceDateTime? : number; // Default base time, in seconds
-  url? : string; // URL of the manifest (post-redirection if one)
+  /** Whether we should request new segments even if they are not yet finished. */
+  aggressiveMode : boolean;
+  /**
+   * If set, offset to add to `performance.now()` to obtain the current server's
+   * time.
+   */
+  externalClockOffset? : number;
+  /** Time, in terms of `performance.now` at which this MPD was received. */
+  manifestReceivedTime? : number;
+  /** Default base time, in seconds. */
+  referenceDateTime? : number;
+  /**
+   * The parser should take this Manifest - which is a previously parsed
+   * Manifest for the same dynamic content - as a base to speed-up the parsing
+   * process.
+   * /!\ If unexpected differences exist between the two, there is a risk of
+   * de-synchronization with what is actually on the server,
+   * Use with moderation.
+   */
+  unsafelyBaseOnPreviousManifest : Manifest | null;
+  /** URL of the manifest (post-redirection if one). */
+  url? : string;
 }
+
+interface ILoadedResource { url? : string;
+                            sendingTime? : number;
+                            receivedTime? : number;
+                            responseData : string; }
 
 export type IParserResponse<T> = { type : "needs-ressources";
                                    value : { ressources : string[];
-                                             continue : (loadedRessources : string[])
-                                                        => IParserResponse<T>; }; } |
+                                             continue : (
+                                               loadedRessources : ILoadedResource[]
+                                             ) => IParserResponse<T>; }; } |
                                  { type : "done";
                                    value : T; };
 /**
@@ -81,6 +105,7 @@ function loadExternalRessourcesAndParse(
   const { children: rootChildren,
           attributes: rootAttributes } = mpdIR;
 
+  const xlinkInfos : IXLinkInfos = new WeakMap();
   if (args.externalClockOffset == null) {
     const isDynamic : boolean = rootAttributes.type === "dynamic";
 
@@ -108,11 +133,11 @@ function loadExternalRessourcesAndParse(
           type: "needs-ressources",
           value: {
             ressources: [UTCTimingHTTPURL],
-            continue: function continueParsingMPD(loadedRessources : string[]) {
+            continue: function continueParsingMPD(loadedRessources : ILoadedResource[]) {
               if (loadedRessources.length !== 1) {
                 throw new Error("DASH parser: wrong number of loaded ressources.");
               }
-              clockOffset = getClockOffset(loadedRessources[0]);
+              clockOffset = getClockOffset(loadedRessources[0].responseData);
               args.externalClockOffset = clockOffset;
               return loadExternalRessourcesAndParse(mpdIR, args, true);
             },
@@ -131,14 +156,14 @@ function loadExternalRessourcesAndParse(
   }
 
   if (xlinksToLoad.length === 0) {
-    return parseCompleteIntermediateRepresentation(mpdIR, args);
+    return parseCompleteIntermediateRepresentation(mpdIR, args, xlinkInfos);
   }
 
   return {
     type: "needs-ressources",
     value: {
       ressources: xlinksToLoad.map(({ ressource }) => ressource),
-      continue: function continueParsingMPD(loadedRessources : string[]) {
+      continue: function continueParsingMPD(loadedRessources : ILoadedResource[]) {
         if (loadedRessources.length !== xlinksToLoad.length) {
           throw new Error("DASH parser: wrong number of loaded ressources.");
         }
@@ -147,17 +172,22 @@ function loadExternalRessourcesAndParse(
         // the resulting array, as we will potentially add elements to the array
         for (let i = loadedRessources.length - 1; i >= 0; i--) {
           const index = xlinksToLoad[i].index;
-          const xlinkData = loadedRessources[i];
+          const { responseData: xlinkData,
+                  receivedTime,
+                  sendingTime,
+                  url } = loadedRessources[i];
           const wrappedData = "<root>" + xlinkData + "</root>";
           const dataAsXML = new DOMParser().parseFromString(wrappedData, "text/xml");
-          if (!dataAsXML || dataAsXML.children.length === 0) {
+          if (dataAsXML == null || dataAsXML.children.length === 0) {
             throw new Error("DASH parser: Invalid external ressources");
           }
           const periods = dataAsXML.children[0].children;
           const periodsIR : IPeriodIntermediateRepresentation[] = [];
           for (let j = 0; j < periods.length; j++) {
             if (periods[j].nodeType === Node.ELEMENT_NODE) {
-              periodsIR.push(createPeriodIntermediateRepresentation(periods[j]));
+              const periodIR = createPeriodIntermediateRepresentation(periods[j]);
+              xlinkInfos.set(periodIR, { receivedTime, sendingTime, url });
+              periodsIR.push(periodIR);
             }
           }
 
@@ -178,35 +208,41 @@ function loadExternalRessourcesAndParse(
  */
 function parseCompleteIntermediateRepresentation(
   mpdIR : IMPDIntermediateRepresentation,
-  args : IMPDParserArguments
+  args : IMPDParserArguments,
+  xlinkInfos : IXLinkInfos
 ) : IParserResponse<IParsedManifest> {
   const { children: rootChildren,
           attributes: rootAttributes } = mpdIR;
   const isDynamic : boolean = rootAttributes.type === "dynamic";
-  const baseURL = resolveURL(normalizeBaseURL(args.url == null ? "" :
-                                                                 args.url),
-                             rootChildren.baseURL);
+  const baseURLs = resolveBaseURLs(args.url === undefined ?
+                                     [] :
+                                     [normalizeBaseURL(args.url)],
+                                   rootChildren.baseURLs);
   const availabilityStartTime = parseAvailabilityStartTime(rootAttributes,
                                                            args.referenceDateTime);
   const timeShiftBufferDepth = rootAttributes.timeShiftBufferDepth;
-  const clockOffset = args.externalClockOffset;
+  const { externalClockOffset: clockOffset,
+           unsafelyBaseOnPreviousManifest } = args;
+  const availabilityTimeOffset =
+    extractMinimumAvailabilityTimeOffset(rootChildren.baseURLs);
 
   const manifestInfos = { aggressiveMode: args.aggressiveMode,
                           availabilityStartTime,
-                          baseURL,
+                          availabilityTimeOffset,
+                          baseURLs,
                           clockOffset,
                           duration: rootAttributes.duration,
                           isDynamic,
-                          timeShiftBufferDepth };
+                          receivedTime: args.manifestReceivedTime,
+                          timeShiftBufferDepth,
+                          unsafelyBaseOnPreviousManifest,
+                          xlinkInfos };
   const parsedPeriods = parsePeriods(rootChildren.periods, manifestInfos);
-  const duration = parseDuration(rootAttributes, parsedPeriods);
+  const mediaPresentationDuration = rootAttributes.duration;
   const parsedMPD : IParsedManifest = {
     availabilityStartTime,
-    baseURL,
     clockOffset: args.externalClockOffset,
-    duration,
-    id: rootAttributes.id != null ? rootAttributes.id :
-                                    "gen-dash-manifest-" + generateManifestID(),
+    isDynamic,
     isLive: isDynamic,
     periods: parsedPeriods,
     suggestedPresentationDelay: rootAttributes.suggestedPresentationDelay,
@@ -216,29 +252,45 @@ function parseCompleteIntermediateRepresentation(
   };
 
   // -- add optional fields --
-  if (rootAttributes.minimumUpdatePeriod != null
-      && rootAttributes.minimumUpdatePeriod > 0)
+  if (rootAttributes.minimumUpdatePeriod !== undefined &&
+      rootAttributes.minimumUpdatePeriod >= 0)
   {
-    parsedMPD.lifetime = rootAttributes.minimumUpdatePeriod;
+    parsedMPD.lifetime = rootAttributes.minimumUpdatePeriod === 0 ?
+      DASH_FALLBACK_LIFETIME_WHEN_MINIMUM_UPDATE_PERIOD_EQUAL_0 :
+      rootAttributes.minimumUpdatePeriod;
   }
 
-  checkManifestIDs(parsedMPD);
   const [minTime, maxTime] = getMinimumAndMaximumPosition(parsedMPD);
   const now = performance.now();
   if (!isDynamic) {
-    if (minTime != null) {
+    if (minTime !== undefined) {
       parsedMPD.minimumTime = { isContinuous: false,
                                 value: minTime,
                                 time: now };
-    }
-    if (duration != null) {
-      parsedMPD.maximumTime = { isContinuous: false,
-                                value: duration,
+    } else if (parsedPeriods[0]?.start !== undefined) {
+      parsedMPD.minimumTime = { isContinuous: false,
+                                value: parsedPeriods[0].start,
                                 time: now };
-    } else if (maxTime != null) {
+    }
+    if (maxTime !== undefined) {
       parsedMPD.maximumTime = { isContinuous: false,
                                 value: maxTime,
                                 time: now };
+    } else if (mediaPresentationDuration !== undefined) {
+      parsedMPD.maximumTime = { isContinuous: false,
+                                value: mediaPresentationDuration,
+                                time: now };
+    } else if (parsedPeriods[parsedPeriods.length - 1] !== undefined) {
+      const lastPeriod = parsedPeriods[parsedPeriods.length - 1];
+      const end = lastPeriod.end ??
+                  (lastPeriod.duration !== undefined ?
+                    lastPeriod.start + lastPeriod.duration :
+                    undefined);
+      if (end !== undefined) {
+        parsedMPD.maximumTime = { isContinuous: false,
+                                  value: end,
+                                  time: now };
+      }
     }
   } else {
     if (minTime != null) {

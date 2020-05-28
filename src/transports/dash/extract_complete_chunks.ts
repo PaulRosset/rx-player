@@ -15,36 +15,7 @@
  */
 
 import { be4toi } from "../../utils/byte_parsing";
-
-/**
- * Find the offset for the first declaration of the given box in an isobmff.
- * Returns -1 if not found.
- *
- * This function does not throw or log in case of partial segments.
- * @param {Uint8Array} buf - the isobmff
- * @param {Number} wantedName
- * @returns {Number} - Offset where the box begins. -1 if not found.
- */
-function findBox(buf : Uint8Array, wantedName : number) : number {
-  const len = buf.length;
-  let i = 0;
-  while (i + 8 < len) {
-    const size = be4toi(buf, i);
-    if (size <= 0) {
-      return -1;
-    }
-
-    const name = be4toi(buf, i + 4);
-    if (name === wantedName) {
-      if (i + size <= len) {
-        return i;
-      }
-      return -1;
-    }
-    i += size;
-  }
-  return -1;
-}
+import findCompleteBox from "../utils/find_complete_box";
 
 /**
  * Take a chunk of ISOBMFF data and extract complete `moof`+`mdat` subsegments
@@ -61,7 +32,7 @@ export default function extractCompleteChunks(
   const chunks : Uint8Array[] = [];
   while (_position < buffer.length) {
     const currentBuffer = buffer.subarray(_position, Infinity);
-    const moofIndex = findBox(currentBuffer, 0x6d6f6f66 /* moof */);
+    const moofIndex = findCompleteBox(currentBuffer, 0x6D6F6F66 /* moof */);
     if (moofIndex < 0) {
       // no moof, not a segment.
       return [ chunks, currentBuffer ];
@@ -73,7 +44,7 @@ export default function extractCompleteChunks(
       return [ chunks, currentBuffer ];
     }
 
-    const mdatIndex = findBox(currentBuffer, 0x6d646174 /* mdat */);
+    const mdatIndex = findCompleteBox(currentBuffer, 0x6D646174 /* mdat */);
     if (mdatIndex < 0) {
       // no mdat, not a segment.
       return [ chunks, currentBuffer ];

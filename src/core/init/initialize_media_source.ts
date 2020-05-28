@@ -14,27 +14,20 @@
  * limitations under the License.
  */
 
-import objectAssign from "object-assign";
 import {
-  asapScheduler,
   BehaviorSubject,
   combineLatest as observableCombineLatest,
-  concat as observableConcat,
-  EMPTY,
   merge as observableMerge,
   Observable,
   of as observableOf,
-  ReplaySubject,
   Subject,
-  timer as observableTimer,
 } from "rxjs";
 import {
   filter,
   finalize,
-  ignoreElements,
   map,
+  mapTo,
   mergeMap,
-  observeOn,
   share,
   startWith,
   switchMap,
@@ -42,24 +35,29 @@ import {
   takeUntil,
   tap,
 } from "rxjs/operators";
+import { shouldReloadMediaSourceOnDecipherabilityUpdate } from "../../compat";
 import config from "../../config";
-import { ICustomError } from "../../errors";
 import log from "../../log";
-import Manifest from "../../manifest";
 import { ITransportPipelines } from "../../transports";
+import deferSubscriptions from "../../utils/defer_subscriptions";
+import { fromEvent } from "../../utils/event_emitter";
+import objectAssign from "../../utils/object_assign";
 import throttle from "../../utils/rx-throttle";
 import ABRManager, {
   IABRManagerArguments,
 } from "../abr";
 import {
+  getCurrentKeySystem,
+  IContentProtection,
   IEMEManagerEvent,
   IKeySystemOption,
 } from "../eme";
 import {
-  createManifestPipeline,
-  IFetchManifestResult,
-  SegmentPipelinesManager,
-} from "../pipelines";
+  createManifestFetcher,
+  IManifestFetcherParsedResult,
+  IManifestFetcherParserOptions,
+  SegmentFetcherCreator,
+} from "../fetchers";
 import { ITextTrackSourceBufferOptions } from "../source_buffers";
 import createEMEManager, {
   IEMEDisabledEvent,
@@ -73,50 +71,85 @@ import isEMEReadyEvent from "./is_eme_ready";
 import createMediaSourceLoader, {
   IMediaSourceLoaderEvent,
 } from "./load_on_media_source";
-import refreshManifest from "./refresh_manifest";
+import manifestUpdateScheduler, {
+  IManifestRefreshSchedulerEvent,
+} from "./manifest_update_scheduler";
 import throwOnMediaError from "./throw_on_media_error";
 import {
+  IDecipherabilityUpdateEvent,
   IInitClockTick,
   IManifestReadyEvent,
+  IManifestUpdateEvent,
   IReloadingMediaSourceEvent,
   IWarningEvent,
 } from "./types";
 
 const { OUT_OF_SYNC_MANIFEST_REFRESH_DELAY } = config;
 
-// Arguments to give to the `initialize` function
-export interface IInitializeOptions {
+/** Arguments to give to the `InitializeOnMediaSource` function. */
+export interface IInitializeArguments {
+  /** Options concerning the ABR logic. */
   adaptiveOptions: IABRManagerArguments;
+  /** `true` if we should play when loaded. */
   autoPlay : boolean;
-  bufferOptions : { wantedBufferAhead$ : BehaviorSubject<number>;
-                    maxBufferAhead$ : Observable<number>;
-                    maxBufferBehind$ : Observable<number>;
-                    manualBitrateSwitchingMode : "seamless" | "direct"; };
+  /** Options concerning the media buffers. */
+  bufferOptions : {
+    /** Buffer "goal" at which we stop downloading new segments. */
+    wantedBufferAhead$ : BehaviorSubject<number>;
+    /** Max buffer size after the current position, in seconds (we GC further up). */
+    maxBufferAhead$ : Observable<number>;
+    /** Max buffer size before the current position, in seconds (we GC further down). */
+    maxBufferBehind$ : Observable<number>;
+    /** Strategy when switching the current bitrate manually (smooth vs reload). */
+    manualBitrateSwitchingMode : "seamless" | "direct";
+  };
+  /** Regularly emit current playback conditions. */
   clock$ : Observable<IInitClockTick>;
+  /** Every encryption configuration set. */
   keySystems : IKeySystemOption[];
+  /** `true` to play low-latency contents optimally. */
   lowLatencyMode : boolean;
+  /** Optional shorter version of the Manifest used for updates only. */
+  manifestUpdateUrl? : string;
+  /** The HTMLMediaElement on which we will play. */
   mediaElement : HTMLMediaElement;
-  networkConfig: { manifestRetry? : number;
-                   offlineRetry? : number;
-                   segmentRetry? : number; };
+  /** Limit the frequency of Manifest updates. */
+  minimumManifestUpdateInterval : number;
+  /** Requests configuration. */
+  networkConfig: {
+    /** Maximum number of Manifest retry. */
+    manifestRetry? : number;
+    /** Maximum number of offline segment retry. */
+    offlineRetry? : number;
+    /** Maximum number of non-offline segment retry. */
+    segmentRetry? : number;
+  };
+  /** Emit the playback rate (speed) set by the user. */
   speed$ : Observable<number>;
+  /** The configured starting position. */
   startAt? : IInitialTimeOptions;
+  /** Configuration specific to the text track. */
   textTrackOptions : ITextTrackSourceBufferOptions;
-  pipelines : ITransportPipelines;
+  /**
+   * "Transport pipelines": logic specific to the current transport
+   * (e.g. DASH, Smooth...)
+   */
+  transportPipelines : ITransportPipelines;
+  /** URL of the Manifest. */
   url? : string;
 }
 
-// Every events emitted by Init.
+/** Every events emitted by `InitializeOnMediaSource`. */
 export type IInitEvent = IManifestReadyEvent |
+                         IManifestUpdateEvent |
                          IMediaSourceLoaderEvent |
                          IEMEManagerEvent |
                          IEMEDisabledEvent |
                          IReloadingMediaSourceEvent |
+                         IDecipherabilityUpdateEvent |
                          IWarningEvent;
 
 /**
- * Central part of the player.
- *
  * Play a content described by the given Manifest.
  *
  * On subscription:
@@ -136,190 +169,216 @@ export default function InitializeOnMediaSource(
     clock$,
     keySystems,
     lowLatencyMode,
+    manifestUpdateUrl,
     mediaElement,
+    minimumManifestUpdateInterval,
     networkConfig,
     speed$,
     startAt,
     textTrackOptions,
-    pipelines,
-    url } : IInitializeOptions
+    transportPipelines,
+    url } : IInitializeArguments
 ) : Observable<IInitEvent> {
-  const warning$ = new Subject<ICustomError>();
+  const { offlineRetry, segmentRetry, manifestRetry } = networkConfig;
 
-  const manifestPipelines =
-    createManifestPipeline(pipelines,
-                           { lowLatencyMode,
-                             manifestRetry: networkConfig.manifestRetry,
-                             offlineRetry: networkConfig.offlineRetry },
-                           warning$);
+  const manifestFetcher = createManifestFetcher(transportPipelines,
+                                                { lowLatencyMode,
+                                                  maxRetryRegular: manifestRetry,
+                                                  maxRetryOffline: offlineRetry });
 
-  // Fetch and parse the manifest from the URL given.
-  // Throttled to avoid doing multiple simultaneous requests.
-  const fetchManifest = throttle(
-    (manifestURL : string | undefined,
-     externalClockOffset : number | undefined)
-    : Observable<IFetchManifestResult> => {
-      return manifestPipelines.fetch(manifestURL).pipe(
-        mergeMap((response) =>
-          manifestPipelines.parse(response.value, manifestURL, externalClockOffset)
-        ),
-        share()
-      );
-    }
-  );
+  /**
+   * Fetch and parse the manifest from the URL given.
+   * Throttled to avoid doing multiple simultaneous requests.
+   */
+  const fetchManifest = throttle((manifestURL : string | undefined,
+                                  options : IManifestFetcherParserOptions)
+    : Observable<IWarningEvent | IManifestFetcherParsedResult> =>
+      manifestFetcher.fetch(manifestURL).pipe(
+        mergeMap((response) => response.type === "warning" ?
+          observableOf(response) : // bubble-up warnings
+          response.parse(options)),
+        share()));
 
-  // Creates pipelines for downloading segments.
-  const segmentPipelinesManager = new SegmentPipelinesManager<any>(pipelines, {
-    lowLatencyMode,
-    offlineRetry: networkConfig.offlineRetry,
-    segmentRetry: networkConfig.segmentRetry,
-  });
+  /** Interface used to download segments. */
+  const segmentFetcherCreator =
+    new SegmentFetcherCreator<any>(transportPipelines, { lowLatencyMode,
+                                                         maxRetryOffline: offlineRetry,
+                                                         maxRetryRegular: segmentRetry });
 
-  // Create ABR Manager, which will choose the right "Representation" for a
-  // given "Adaptation".
+  /** Choose the right "Representation" for a given "Adaptation". */
   const abrManager = new ABRManager(adaptiveOptions);
 
-  // Create and open a new MediaSource object on the given media element.
+  /**
+   * Create and open a new MediaSource object on the given media element.
+   * The MediaSource will be closed on unsubscription.
+   */
   const openMediaSource$ = openMediaSource(mediaElement).pipe(
-    observeOn(asapScheduler), // to launch subscriptions only when all
-    share());                 // Observables here are linked
+    deferSubscriptions(),
+    share());
 
-  // Create EME Manager, an observable which will manage every EME-related
-  // issue.
+  /** Send content protection data to the `EMEManager`. */
+  const protectedSegments$ = new Subject<IContentProtection>();
+
+  /** Create `EMEManager`, an observable which will handle content DRM. */
   const emeManager$ = openMediaSource$.pipe(
-    mergeMap(() => createEMEManager(mediaElement, keySystems)),
-    observeOn(asapScheduler), // to launch subscriptions only when all
-    share());                 // Observables here are linked
+    mergeMap(() => createEMEManager(mediaElement, keySystems, protectedSegments$)),
+    deferSubscriptions(),
+    share());
 
-  // Translate errors coming from the media element into RxPlayer errors
-  // through a throwing Observable.
+  /**
+   * Translate errors coming from the media element into RxPlayer errors
+   * through a throwing Observable.
+   */
   const mediaError$ = throwOnMediaError(mediaElement);
 
-  const loadContent$ = observableCombineLatest([
-    openMediaSource$,
-    fetchManifest(url, undefined),
-    emeManager$.pipe(filter(isEMEReadyEvent), take(1)),
-  ]).pipe(mergeMap(([ initialMediaSource, { manifest, sendingTime } ]) => {
+  /**
+   * Emit when EME negociations that should happen before pushing any content
+   * have finished.
+   */
+  const waitForEMEReady$ = emeManager$.pipe(filter(isEMEReadyEvent),
+                                            take(1));
 
-    log.debug("Init: Calculating initial time");
-    const initialTime = getInitialTime(manifest, lowLatencyMode, startAt);
-    log.debug("Init: Initial time calculated:", initialTime);
+  /** Do the first Manifest request. */
+  const initialManifestRequest$ = fetchManifest(url, { previousManifest: null,
+                                                       unsafeMode: false }).pipe(
+    deferSubscriptions(),
+    share());
 
-    const mediaSourceLoader = createMediaSourceLoader({
-      mediaElement,
-      manifest,
-      clock$,
-      speed$,
-      abrManager,
-      segmentPipelinesManager,
-      bufferOptions: objectAssign({ textTrackOptions }, bufferOptions),
-    });
+  const initialManifestRequestWarnings$ = initialManifestRequest$
+    .pipe(filter((evt) : evt is IWarningEvent => evt.type === "warning"));
+  const initialManifest$ = initialManifestRequest$
+    .pipe(filter((evt) : evt is IManifestFetcherParsedResult => evt.type === "parsed"));
 
-    const recursiveLoad$ = recursivelyLoadOnMediaSource(initialMediaSource,
-                                                        initialTime,
-                                                        autoPlay);
+  /** Load and play the content asked. */
+  const loadContent$ = observableCombineLatest([initialManifest$,
+                                                openMediaSource$,
+                                                waitForEMEReady$]).pipe(
+    mergeMap(([parsedManifest, initialMediaSource]) => {
+      const manifest = parsedManifest.manifest;
 
-    // Emit each time the manifest is refreshed.
-    const manifestRefreshed$ = new ReplaySubject<{ manifest : Manifest;
-                                                   sendingTime? : number; }>(1);
+      log.debug("Init: Calculating initial time");
+      const initialTime = getInitialTime(manifest, lowLatencyMode, startAt);
+      log.debug("Init: Initial time calculated:", initialTime);
 
-    // Emit when we want to manually update the manifest.
-    // The value allow to set a delay relatively to the last Manifest refresh
-    // (to avoid asking for it too often).
-    const scheduleManifestRefresh$ = new Subject<number>();
+      const mediaSourceLoader = createMediaSourceLoader({
+        abrManager,
+        bufferOptions: objectAssign({ textTrackOptions }, bufferOptions),
+        clock$,
+        manifest,
+        mediaElement,
+        segmentFetcherCreator,
+        speed$,
+      });
 
-    // Emit when the manifest should be refreshed. Either when:
-    //   - A buffer asks for it to be refreshed
-    //   - its lifetime expired.
-    // TODO if we go a little more clever, manifestRefreshed$ could be removed
-    const manifestRefresh$ = manifestRefreshed$.pipe(
-      startWith({ manifest, sendingTime }),
-      switchMap(({ manifest: newManifest, sendingTime: newSendingTime }) => {
-        const manualRefresh$ = scheduleManifestRefresh$.pipe(
-          mergeMap((delay) => {
-            // schedule a Manifest refresh to avoid sending too much request.
-            const timeSinceLastRefresh = newSendingTime == null ?
-                                           0 :
-                                           performance.now() - newSendingTime;
-            return observableTimer(delay - timeSinceLastRefresh);
+      // handle initial load and reloads
+      const recursiveLoad$ = recursivelyLoadOnMediaSource(initialMediaSource,
+                                                          initialTime,
+                                                          autoPlay);
+
+      // Emit when we want to manually update the manifest.
+      const scheduleRefresh$ = new Subject<IManifestRefreshSchedulerEvent>();
+
+      const manifestUpdate$ = manifestUpdateScheduler({ fetchManifest,
+                                                        initialManifest: parsedManifest,
+                                                        manifestUpdateUrl,
+                                                        minimumManifestUpdateInterval,
+                                                        scheduleRefresh$ });
+
+      const manifestEvents$ = observableMerge(
+        fromEvent(manifest, "manifestUpdate")
+          .pipe(mapTo(EVENTS.manifestUpdate())),
+        fromEvent(manifest, "decipherabilityUpdate")
+          .pipe(map(EVENTS.decipherabilityUpdate)));
+
+      const setUndecipherableRepresentations$ = emeManager$.pipe(tap((evt) => {
+        if (evt.type === "blacklist-keys") {
+          log.info("Init: blacklisting Representations based on keyIDs");
+          manifest.addUndecipherableKIDs(evt.value);
+        } else if (evt.type === "blacklist-protection-data") {
+          log.info("Init: blacklisting Representations based on protection data.");
+          manifest.addUndecipherableProtectionData(evt.value.type, evt.value.data);
+        }
+      }));
+
+      return observableMerge(manifestEvents$,
+                             manifestUpdate$,
+                             setUndecipherableRepresentations$,
+                             recursiveLoad$)
+        .pipe(startWith(EVENTS.manifestReady(manifest)),
+              finalize(() => { scheduleRefresh$.complete(); }));
+
+      /**
+       * Load the content defined by the Manifest in the mediaSource given at the
+       * given position and playing status.
+       * This function recursively re-call itself when a MediaSource reload is
+       * wanted.
+       * @param {MediaSource} mediaSource
+       * @param {number} position
+       * @param {boolean} shouldPlay
+       * @returns {Observable}
+       */
+      function recursivelyLoadOnMediaSource(
+        mediaSource : MediaSource,
+        position : number,
+        shouldPlay : boolean
+      ) : Observable<IInitEvent> {
+        const reloadMediaSource$ = new Subject<{ currentTime : number;
+                                                 isPaused : boolean; }>();
+        const mediaSourceLoader$ = mediaSourceLoader(mediaSource, position, shouldPlay)
+          .pipe(tap(evt => {
+                  switch (evt.type) {
+                    case "needs-manifest-refresh":
+                      scheduleRefresh$.next({ completeRefresh: false,
+                                              canUseUnsafeMode: true });
+                      break;
+                    case "manifest-might-be-out-of-sync":
+                      scheduleRefresh$.next({
+                        completeRefresh: true,
+                        canUseUnsafeMode: false,
+                        delay: OUT_OF_SYNC_MANIFEST_REFRESH_DELAY,
+                      });
+                      break;
+                    case "needs-media-source-reload":
+                      reloadMediaSource$.next(evt.value);
+                      break;
+                    case "needs-decipherability-flush":
+                      const keySystem = getCurrentKeySystem(mediaElement);
+                      if (shouldReloadMediaSourceOnDecipherabilityUpdate(keySystem)) {
+                        reloadMediaSource$.next(evt.value);
+                        return;
+                      }
+
+                      // simple seek close to the current position to flush the buffers
+                      const { currentTime } = evt.value;
+                      if (currentTime + 0.001 < evt.value.duration) {
+                        mediaElement.currentTime += 0.001;
+                      } else {
+                        mediaElement.currentTime = currentTime;
+                      }
+                      break;
+                    case "protected-segment":
+                      protectedSegments$.next(evt.value);
+                  }
+                }));
+
+        const currentLoad$ = mediaSourceLoader$.pipe(takeUntil(reloadMediaSource$));
+
+        const handleReloads$ = reloadMediaSource$.pipe(
+          switchMap(({ currentTime, isPaused }) => {
+            return openMediaSource(mediaElement).pipe(
+              mergeMap(newMS => recursivelyLoadOnMediaSource(newMS,
+                                                             currentTime,
+                                                             !isPaused)),
+              startWith(EVENTS.reloadingMediaSource())
+            );
           }));
 
-        const autoRefresh$ = (() => {
-          if (newManifest.lifetime == null || newManifest.lifetime <= 0) {
-            return EMPTY;
-          }
-          const timeSinceRequest = newSendingTime == null ?
-                                     0 :
-                                     performance.now() - newSendingTime;
-          const updateTimeout = newManifest.lifetime * 1000 - timeSinceRequest;
-          return observableTimer(updateTimeout);
-        })();
+        return observableMerge(handleReloads$, currentLoad$);
+      }
+    }));
 
-        return observableMerge(autoRefresh$, manualRefresh$)
-          .pipe(take(1),
-                mergeMap(() => refreshManifest(manifest, fetchManifest)),
-                tap(val => manifestRefreshed$.next(val)),
-                ignoreElements());
-      }));
-
-    return observableMerge(manifestRefresh$, recursiveLoad$)
-      .pipe(finalize(() => {
-        manifestRefreshed$.complete();
-        scheduleManifestRefresh$.complete();
-      }));
-
-    /**
-     * Load the content defined by the Manifest in the mediaSource given at the
-     * given position and playing status.
-     * This function recursively re-call itself when a MediaSource reload is
-     * wanted.
-     * @param {MediaSource} mediaSource
-     * @param {number} position
-     * @param {boolean} shouldPlay
-     * @returns {Observable}
-     */
-    function recursivelyLoadOnMediaSource(
-      mediaSource : MediaSource,
-      position : number,
-      shouldPlay : boolean
-    ) : Observable<IInitEvent> {
-      const reloadMediaSource$ = new Subject<{ currentTime : number;
-                                               isPaused : boolean; }>();
-      const mediaSourceLoader$ = mediaSourceLoader(mediaSource, position, shouldPlay)
-        .pipe(tap(evt => {
-                switch (evt.type) {
-                  case "needs-manifest-refresh":
-                    scheduleManifestRefresh$.next(0);
-                    break;
-                  case "manifest-might-be-out-of-sync":
-                    scheduleManifestRefresh$.next(OUT_OF_SYNC_MANIFEST_REFRESH_DELAY);
-                    break;
-                  case "needs-media-source-reload":
-                    reloadMediaSource$.next(evt.value);
-                    break;
-                }
-              }));
-
-      const currentLoad$ = observableConcat(
-        observableOf(EVENTS.manifestReady(manifest)),
-        mediaSourceLoader$.pipe(takeUntil(reloadMediaSource$)));
-
-      const handleReloads$ = reloadMediaSource$.pipe(
-        switchMap(({ currentTime, isPaused }) => {
-          return openMediaSource(mediaElement).pipe(
-            mergeMap(newMS => recursivelyLoadOnMediaSource(newMS,
-                                                           currentTime,
-                                                           !isPaused)),
-            startWith(EVENTS.reloadingMediaSource())
-          );
-        }));
-
-      return observableMerge(handleReloads$, currentLoad$);
-    }
-  }));
-
-  return observableMerge(loadContent$,
+  return observableMerge(initialManifestRequestWarnings$,
+                         loadContent$,
                          mediaError$,
-                         emeManager$,
-                         warning$.pipe(map(EVENTS.warning)));
+                         emeManager$);
 }

@@ -15,45 +15,51 @@
  */
 import {
   ICustomError,
+  isKnownError,
   MediaError,
 } from "../errors";
 import { IParsedPeriod } from "../parsers/manifest";
 import arrayFind from "../utils/array_find";
 import objectValues from "../utils/object_values";
 import Adaptation, {
-  IAdaptationType,
   IRepresentationFilter,
 } from "./adaptation";
+import { IAdaptationType } from "./types";
 
-// Structure listing every `Adaptation` in a Period.
+/** Structure listing every `Adaptation` in a Period. */
 export type IManifestAdaptations = Partial<Record<IAdaptationType, Adaptation[]>>;
 
 /**
- * Class representing a single `Period` of the Manifest.
- * A Period contains every information about the content available for a
- * specific period in time.
+ * Class representing the tracks and qualities available from a given time
+ * period in the the Manifest.
  * @class Period
  */
 export default class Period {
-  // ID uniquely identifying the Period in the Manifest.
+  /** ID uniquely identifying the Period in the Manifest. */
   public readonly id : string;
 
-  // Every 'Adaptation' in that Period, per type of Adaptation.
+  /** Every 'Adaptation' in that Period, per type of Adaptation. */
   public adaptations : IManifestAdaptations;
 
-  // Duration of this Period, in seconds.
-  // `undefined` for still-running Periods.
-  public duration? : number;
-
-  // Absolute start time of the Period, in seconds.
+  /** Absolute start time of the Period, in seconds. */
   public start : number;
 
-  // Absolute end time of the Period, in seconds.
-  // `undefined` for still-running Periods.
+  /**
+   * Duration of this Period, in seconds.
+   * `undefined` for still-running Periods.
+   */
+  public duration? : number;
+
+  /**
+   * Absolute end time of the Period, in seconds.
+   * `undefined` for still-running Periods.
+   */
   public end? : number;
 
-  // Array containing every errors that happened when the Period has been
-  // created, in the order they have happened.
+  /**
+   * Array containing every errors that happened when the Period has been
+   * created, in the order they have happened.
+   */
   public readonly parsingErrors : ICustomError[];
 
   /**
@@ -70,7 +76,7 @@ export default class Period {
     this.adaptations = (Object.keys(args.adaptations) as IAdaptationType[])
       .reduce<IManifestAdaptations>((acc, type) => {
         const adaptationsForType = args.adaptations[type];
-        if (!adaptationsForType) {
+        if (adaptationsForType == null) {
           return acc;
         }
         const filteredAdaptations = adaptationsForType
@@ -79,7 +85,9 @@ export default class Period {
             try {
               newAdaptation = new Adaptation(adaptation, { representationFilter });
             } catch (err) {
-              if (err.code === "MANIFEST_UNSUPPORTED_ADAPTATION_TYPE") {
+              if (isKnownError(err) &&
+                  err.code === "MANIFEST_UNSUPPORTED_ADAPTATION_TYPE")
+              {
                 this.parsingErrors.push(err);
                 return null;
               }
@@ -99,13 +107,15 @@ export default class Period {
                                "No supported " + type + " adaptations");
         }
 
-        if (filteredAdaptations.length) {
+        if (filteredAdaptations.length > 0) {
           acc[type] = filteredAdaptations;
         }
         return acc;
       }, {});
 
-    if (!this.adaptations.video && !this.adaptations.audio) {
+    if (!Array.isArray(this.adaptations.video) &&
+        !Array.isArray(this.adaptations.audio))
+    {
       throw new MediaError("MANIFEST_PARSE_ERROR",
                            "No supported audio and video tracks.");
     }
@@ -141,7 +151,9 @@ export default class Period {
    * @returns {Array.<Object>}
    */
   getAdaptationsForType(adaptationType : IAdaptationType) : Adaptation[] {
-    return this.adaptations[adaptationType] || [];
+    const adaptationsForType = this.adaptations[adaptationType];
+    return adaptationsForType == null ? [] :
+                                        adaptationsForType;
   }
 
   /**
@@ -151,5 +163,20 @@ export default class Period {
    */
   getAdaptation(wantedId : string) : Adaptation|undefined {
     return arrayFind(this.getAdaptations(), ({ id }) => wantedId === id);
+  }
+
+  getPlayableAdaptations(type? : IAdaptationType) {
+    if (type === undefined) {
+      return this.getAdaptations().filter(ada => {
+        return ada.isSupported && ada.decipherable !== false;
+      });
+    }
+    const adaptationsForType = this.adaptations[type];
+    if (adaptationsForType === undefined) {
+      return [];
+    }
+    return adaptationsForType.filter(ada => {
+      return ada.isSupported && ada.decipherable !== false;
+    });
   }
 }

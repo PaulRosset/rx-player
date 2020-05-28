@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-import objectAssign from "object-assign";
 import {
   ICompatVTTCue,
   isVTTCue,
   makeVTTCue,
 } from "../../../../compat";
 import arrayFind from "../../../../utils/array_find";
+import isNonEmptyString from "../../../../utils/is_non_empty_string";
+import objectAssign from "../../../../utils/object_assign";
 import getParameters, {
   ITTParameters,
 } from "../get_parameters";
@@ -39,6 +40,7 @@ import {
   getTextNodes,
 } from "../nodes";
 import { REGXP_PERCENT_VALUES, } from "../regexps";
+import resolveStylesInheritance from "../resolve_styles_inheritance";
 
 /**
  * Style attributes currently used.
@@ -50,9 +52,6 @@ const WANTED_STYLE_ATTRIBUTES = [
   "align",
 ];
 
-/**
- * @type {Object}
- */
 const TEXT_ALIGN_TO_LIGN_ALIGN : Partial<Record<string, string>> = {
   left: "start",
   center: "center",
@@ -82,10 +81,10 @@ function parseTTMLStringToVTT(
   const ret : Array<ICompatVTTCue|TextTrackCue> = [];
   const xml = new DOMParser().parseFromString(str, "text/xml");
 
-  if (xml) {
+  if (xml !== null && xml !== undefined) {
     const tts = xml.getElementsByTagName("tt");
     const tt = tts[0];
-    if (!tt) {
+    if (tt === undefined) {
       throw new Error("invalid XML");
     }
 
@@ -103,13 +102,17 @@ function parseTTMLStringToVTT(
       if (styleNode instanceof Element) {
         const styleID = styleNode.getAttribute("xml:id");
         if (styleID != null) {
-          styles.push({
-            id: styleID,
-            style: getStylingFromElement(styleNode),
-          });
+          const subStyles = styleNode.getAttribute("style");
+          const extendsStyles = subStyles === null ? [] :
+                                                     subStyles.split(" ");
+          styles.push({ id: styleID,
+                        style: getStylingFromElement(styleNode),
+                        extendsStyles });
         }
       }
     }
+
+    resolveStylesInheritance(styles);
 
     // construct regions array based on the xml as an optimization
     const regions : IStyleObject[] = [];
@@ -121,16 +124,17 @@ function parseTTMLStringToVTT(
           let regionStyle = getStylingFromElement(regionNode);
 
           const associatedStyle = regionNode.getAttribute("style");
-          if (associatedStyle) {
+          if (isNonEmptyString(associatedStyle)) {
             const style = arrayFind(styles, (x) => x.id === associatedStyle);
-            if (style) {
+            if (style !== undefined) {
               regionStyle = objectAssign({}, style.style, regionStyle);
             }
           }
-          regions.push({
-            id: regionID,
-            style: regionStyle,
-          });
+          regions.push({ id: regionID,
+                         style: regionStyle,
+
+                         // already handled
+                         extendsStyles: [] });
         }
       }
     }
@@ -138,11 +142,12 @@ function parseTTMLStringToVTT(
     // Computing the style takes a lot of ressources.
     // To avoid too much re-computation, let's compute the body style right
     // now and do the rest progressively.
-    const bodyStyle = body ?
+    const bodyStyle = body !== null ?
       getStylingAttributes(WANTED_STYLE_ATTRIBUTES, [body], styles, regions) :
       getStylingAttributes(WANTED_STYLE_ATTRIBUTES, [], styles, regions);
 
-    const bodySpaceAttribute = body ? body.getAttribute("xml:space") : undefined;
+    const bodySpaceAttribute = body !== null ? body.getAttribute("xml:space") :
+                                               undefined;
     const shouldTrimWhiteSpaceOnBody =
       bodySpaceAttribute === "default" || params.spaceStyle === "default";
 
@@ -156,19 +161,18 @@ function parseTTMLStringToVTT(
         );
 
         const paragraphSpaceAttribute = paragraph.getAttribute("xml:space");
-        const shouldTrimWhiteSpaceOnParagraph = paragraphSpaceAttribute ?
-          paragraphSpaceAttribute === "default" : shouldTrimWhiteSpaceOnBody;
+        const shouldTrimWhiteSpaceOnParagraph =
+          isNonEmptyString(paragraphSpaceAttribute) ? paragraphSpaceAttribute === "default" :
+                                                      shouldTrimWhiteSpaceOnBody;
 
-        const cue = parseCue(
-          paragraph,
-          timeOffset,
-          styles,
-          regions,
-          paragraphStyle,
-          params,
-          shouldTrimWhiteSpaceOnParagraph
-        );
-        if (cue) {
+        const cue = parseCue(paragraph,
+                             timeOffset,
+                             styles,
+                             regions,
+                             paragraphStyle,
+                             params,
+                             shouldTrimWhiteSpaceOnParagraph);
+        if (cue !== null) {
           ret.push(cue);
         }
       }
@@ -204,7 +208,7 @@ function parseCue(
   // If paragraph has neither time attributes, nor
   // non-whitespace text, don't try to make a cue out of it.
   if (!paragraph.hasAttribute("begin") && !paragraph.hasAttribute("end") &&
-    /^\s*$/.test(paragraph.textContent || "")
+      /^\s*$/.test(paragraph.textContent === null ? "" : paragraph.textContent)
   ) {
     return null;
   }
@@ -212,7 +216,7 @@ function parseCue(
   const { start, end } = getTimeDelimiters(paragraph, params);
   const text = generateTextContent(paragraph, shouldTrimWhiteSpace);
   const cue = makeVTTCue(start + offset, end + offset, text);
-  if (!cue) {
+  if (cue === null) {
     return null;
   }
   if (isVTTCue(cue)) {
@@ -246,7 +250,10 @@ function generateTextContent(
     for (let i = 0; i < childNodes.length; i++) {
       const currentNode = childNodes[i];
       if (currentNode.nodeName === "#text") {
-        let textContent = currentNode.textContent || "";
+        let textContent = currentNode.textContent;
+        if (textContent === null) {
+          textContent = "";
+        }
 
         if (shouldTrimWhiteSpaceFromParent) {
           // 1. Trim leading and trailing whitespace.
@@ -277,8 +284,9 @@ function generateTextContent(
         currentNode.childNodes.length > 0
       ) {
         const spaceAttribute = (currentNode as Element).getAttribute("xml:space");
-        const shouldTrimWhiteSpaceForSpan = spaceAttribute ?
-          spaceAttribute === "default" : shouldTrimWhiteSpaceFromParent;
+        const shouldTrimWhiteSpaceForSpan = isNonEmptyString(spaceAttribute) ?
+          spaceAttribute === "default" :
+          shouldTrimWhiteSpaceFromParent;
 
         text += loop(currentNode, shouldTrimWhiteSpaceForSpan);
       }
@@ -296,7 +304,7 @@ function generateTextContent(
  */
 function addStyle(cue : ICompatVTTCue, style : IStyleList) {
   const extent = style.extent;
-  if (extent) {
+  if (isNonEmptyString(extent)) {
     const results = REGXP_PERCENT_VALUES.exec(extent);
     if (results != null) {
       // Use width value of the extent attribute for size.
@@ -321,7 +329,7 @@ function addStyle(cue : ICompatVTTCue, style : IStyleList) {
   }
 
   const origin = style.origin;
-  if (origin) {
+  if (isNonEmptyString(origin)) {
     const results = REGXP_PERCENT_VALUES.exec(origin);
     if (results != null) {
       // for vertical text use first coordinate of tts:origin
@@ -347,7 +355,7 @@ function addStyle(cue : ICompatVTTCue, style : IStyleList) {
   }
 
   const align = style.align;
-  if (align) {
+  if (isNonEmptyString(align)) {
     cue.align = align;
     if (align === "center") {
       if (cue.align !== "center") {
@@ -357,8 +365,14 @@ function addStyle(cue : ICompatVTTCue, style : IStyleList) {
       }
       cue.position = "auto";
     }
-    cue.positionAlign = TEXT_ALIGN_TO_POSITION_ALIGN[align] || "";
-    cue.lineAlign = TEXT_ALIGN_TO_LIGN_ALIGN[align] || "";
+
+    const positionAlign = TEXT_ALIGN_TO_POSITION_ALIGN[align];
+    cue.positionAlign = positionAlign === undefined ? "" :
+                                                      positionAlign;
+
+    const lineAlign = TEXT_ALIGN_TO_LIGN_ALIGN[align];
+    cue.lineAlign = lineAlign === undefined ? "" :
+                                              lineAlign;
   }
 }
 

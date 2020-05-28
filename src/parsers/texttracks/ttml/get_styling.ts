@@ -16,14 +16,17 @@
 
 import arrayFind from "../../../utils/array_find";
 import arrayIncludes from "../../../utils/array_includes";
+import isNonEmptyString from "../../../utils/is_non_empty_string";
 import startsWith from "../../../utils/starts_with";
 
 export type IStyleList =
   Partial<Record<string, string>>;
 
+// Object defining a single element's (region/style...) style parameters
 export interface IStyleObject {
-  id: string;
-  style: IStyleList;
+  id : string; // The ID of the current element
+  style : IStyleList; // All set style preference
+  extendsStyles : string[]; // ID of the "style" elements this element extends
 }
 
 /**
@@ -49,7 +52,7 @@ export function getStylingAttributes(
   const leftAttributes = attributes.slice();
   for (let i = 0; i <= nodes.length - 1; i++) {
     const node = nodes[i];
-    if (node) {
+    if (node !== undefined) {
       let styleID : string|undefined;
       let regionID : string|undefined;
 
@@ -68,7 +71,7 @@ export function getStylingAttributes(
             if (arrayIncludes(leftAttributes, nameWithoutTTS)) {
               currentStyle[nameWithoutTTS] = attribute.value;
               leftAttributes.splice(j, 1);
-              if (!leftAttributes.length) {
+              if (leftAttributes.length === 0) {
                 return currentStyle;
               }
             }
@@ -77,16 +80,16 @@ export function getStylingAttributes(
       }
 
       // 2. the style is referenced on a "style" attribute
-      if (styleID) {
+      if (isNonEmptyString(styleID)) {
         const style = arrayFind(styles, (x) => x.id === styleID);
-        if (style) {
+        if (style !== undefined) {
           for (let j = 0; j <= leftAttributes.length - 1; j++) {
             const attribute = leftAttributes[j];
-            if (!currentStyle[attribute]) {
-              if (style.style[attribute]) {
+            if (!isNonEmptyString(currentStyle[attribute])) {
+              if (isNonEmptyString(style.style[attribute])) {
                 currentStyle[attribute] = style.style[attribute];
                 leftAttributes.splice(j, 1);
-                if (!leftAttributes.length) {
+                if (leftAttributes.length === 0) {
                   return currentStyle;
                 }
                 j--;
@@ -98,18 +101,16 @@ export function getStylingAttributes(
 
       // 3. the node reference a region (which can have a value for the
       //    corresponding style)
-      if (regionID) {
-        const region = arrayFind(regions, (x : IStyleObject) =>
-          x.id === regionID
-        );
-        if (region) {
+      if (isNonEmptyString(regionID)) {
+        const region = arrayFind(regions, (x : IStyleObject) => x.id === regionID);
+        if (region !== undefined) {
           for (let j = 0; j <= leftAttributes.length - 1; j++) {
             const attribute = leftAttributes[j];
-            if (!currentStyle[attribute]) {
-              if (region.style[attribute]) {
+            if (!isNonEmptyString(currentStyle[attribute])) {
+              if (isNonEmptyString(region.style[attribute])) {
                 currentStyle[attribute] = region.style[attribute];
                 leftAttributes.splice(j, 1);
-                if (!leftAttributes.length) {
+                if (leftAttributes.length === 0) {
                   return currentStyle;
                 }
                 j--;

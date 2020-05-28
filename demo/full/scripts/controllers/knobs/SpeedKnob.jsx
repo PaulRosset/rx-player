@@ -29,6 +29,7 @@ const PlaybackRateKnob = ({
   return (
     <Knob
       className={className}
+      ariaLabel="Update the current playback speed"
       name="Playback Rate"
       disabled={options.length < 2}
       onChange={onPlaybackRateChange}
@@ -38,8 +39,8 @@ const PlaybackRateKnob = ({
   );
 };
 
-export default withModulesState({
+export default React.memo(withModulesState({
   player: {
     playbackRate: "playbackRate",
   },
-})(PlaybackRateKnob);
+})(PlaybackRateKnob));

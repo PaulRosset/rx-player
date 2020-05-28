@@ -41,9 +41,10 @@ const SubtitlesKnobBase = ({
 
   return (
     <Knob
-      name="Subtitles"
+      name="Subtitles Track"
+      ariaLabel="Update the current subtitles"
       className={className}
-      disabled={!availableSubtitles.length}
+      disabled={options.length <= 1}
       onChange={onLanguageChange}
       options={options}
       selected={currentLanguageIndex}
@@ -51,9 +52,9 @@ const SubtitlesKnobBase = ({
   );
 };
 
-export default withModulesState({
+export default React.memo(withModulesState({
   player: {
     subtitle: "currentSubtitle",
     availableSubtitles: "availableSubtitles",
   },
-})(SubtitlesKnobBase);
+})(SubtitlesKnobBase));

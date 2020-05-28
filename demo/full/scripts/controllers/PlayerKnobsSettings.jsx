@@ -7,14 +7,13 @@ import SubtitlesKnob from "./knobs/Subtitles.jsx";
 import VideoTrack from "./knobs/VideoTrack.jsx";
 import PlaybackRateKnob from "./knobs/SpeedKnob.jsx";
 
-const PlayerKnobsSettings = ({
+function PlayerKnobsSettings({
   shouldDisplay,
   close,
   player,
-  availableVideoTracks,
   lowLatencyMode,
   isContentLoaded,
-}) => {
+}) {
 
   if (!isContentLoaded) {
     return null;
@@ -43,20 +42,16 @@ const PlayerKnobsSettings = ({
         <VideoBitrateKnob className="black-knob" player={player} />
         <LanguageKnob className="black-knob" player={player} />
         <SubtitlesKnob className="black-knob" player={player} />
-        {
-          availableVideoTracks.length > 1 ?
-            <VideoTrack player={player} /> : null
-        }
+        <VideoTrack className="black-knob" player={player} />
       </div>
     </div>
   );
-};
+}
 
-export default withModulesState({
+export default React.memo(withModulesState({
   player: {
     lowLatencyMode: "lowLatencyMode",
     isStopped: "isStopped",
     isContentLoaded: "isContentLoaded",
-    availableVideoTracks: "availableVideoTracks",
   },
-})(PlayerKnobsSettings);
+})(PlayerKnobsSettings));

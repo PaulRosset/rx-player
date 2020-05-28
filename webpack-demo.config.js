@@ -1,6 +1,6 @@
 /* eslint-env node */
 const path = require("path");
-const UglifyJsPlugin = require("uglifyjs-webpack-plugin");
+const TerserPlugin = require("terser-webpack-plugin");
 const webpack = require("webpack");
 
 const RXP_ENV = process.env.RXP_ENV || "production";
@@ -20,13 +20,14 @@ module.exports = {
     filename: "bundle.js",
   },
   optimization: {
+    minimize: shouldMinify,
     minimizer: shouldMinify ? [
-      new UglifyJsPlugin(),
+      new TerserPlugin(),
     ] : [],
   },
   performance: {
-    maxEntrypointSize: shouldMinify ? 1000000 : 2000000,
-    maxAssetSize: shouldMinify ? 1000000 : 2000000,
+    maxEntrypointSize: shouldMinify ? 1000000 : 2500000,
+    maxAssetSize: shouldMinify ? 1000000 : 2500000,
   },
   module: {
     rules: [

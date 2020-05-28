@@ -6,9 +6,11 @@ import {
 
 export default function parseDRMConfigurations(drmConfigurations) {
   return Promise.all(drmConfigurations.map(drmConfig => {
-    const { licenseServerUrl,
-            serverCertificateUrl,
-            drm } = drmConfig;
+    const { drm,
+            fallbackKeyError,
+            fallbackLicenseRequest,
+            licenseServerUrl,
+            serverCertificateUrl } = drmConfig;
 
     if (!licenseServerUrl) {
       return ;
@@ -17,7 +19,13 @@ export default function parseDRMConfigurations(drmConfigurations) {
     const type = drm.toLowerCase();
     const keySystem = {
       type,
-      getLicense: generateGetLicense(licenseServerUrl, type),
+      getLicense: generateGetLicense(licenseServerUrl,
+                                     type,
+                                     !!fallbackLicenseRequest),
+      fallbackOn: {
+        keyInternalError: !!fallbackKeyError,
+        keyOutputRestricted: !!fallbackKeyError,
+      },
     };
 
     if (!serverCertificateUrl) {
@@ -47,6 +55,9 @@ function getServerCertificate(url) {
         reject();
       }
     };
+    xhr.onerror = (err) => {
+      reject(err);
+    };
     xhr.send();
   });
 }
@@ -60,7 +71,7 @@ function formatPlayreadyChallenge(challenge) {
   return xml;
 }
 
-function generateGetLicense(licenseServerUrl, drmType) {
+function generateGetLicense(licenseServerUrl, drmType, fallbackOnLastTry) {
   const isPlayready = drmType.indexOf("playready") !== -1;
   return (rawChallenge) => {
     const challenge =  isPlayready ?
@@ -68,12 +79,21 @@ function generateGetLicense(licenseServerUrl, drmType) {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", licenseServerUrl, true);
     return new Promise((resolve, reject) => {
+      xhr.onerror = () => {
+        const error = new Error("getLicense's request failed on an error");
+        error.fallbackOnLastTry = fallbackOnLastTry;
+        reject(error);
+      };
       xhr.onload = (evt) => {
         if (xhr.status >= 200 && xhr.status < 300) {
           const license = evt.target.response;
           resolve(license);
         } else {
-          reject();
+          const error = new Error("getLicense's request finished with a " +
+                                  `${xhr.status} HTTP error`);
+          error.noRetry = fallbackOnLastTry;
+          error.fallbackOnLastTry = fallbackOnLastTry;
+          reject(error);
         }
       };
       if (isPlayready) {
