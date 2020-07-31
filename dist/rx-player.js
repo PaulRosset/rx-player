@@ -1620,6 +1620,7 @@ function isNullOrUndefined(x) {
 /* unused harmony export __metadata */
 /* unused harmony export __awaiter */
 /* unused harmony export __generator */
+/* unused harmony export __createBinding */
 /* unused harmony export __exportStar */
 /* unused harmony export __values */
 /* unused harmony export __read */
@@ -1635,18 +1636,18 @@ function isNullOrUndefined(x) {
 /* unused harmony export __classPrivateFieldGet */
 /* unused harmony export __classPrivateFieldSet */
 /*! *****************************************************************************
-Copyright (c) Microsoft Corporation. All rights reserved.
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use
-this file except in compliance with the License. You may obtain a copy of the
-License at http://www.apache.org/licenses/LICENSE-2.0
+Copyright (c) Microsoft Corporation.
 
-THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
-WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE,
-MERCHANTABLITY OR NON-INFRINGEMENT.
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
 
-See the Apache Version 2.0 License for specific language governing permissions
-and limitations under the License.
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
 ***************************************************************************** */
 /* global Reflect, Promise */
 
@@ -1739,8 +1740,13 @@ function __generator(thisArg, body) {
     }
 }
 
+function __createBinding(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}
+
 function __exportStar(m, exports) {
-    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
+    for (var p in m) if (p !== "default" && !exports.hasOwnProperty(p)) exports[p] = m[p];
 }
 
 function __values(o) {
@@ -3074,7 +3080,7 @@ function removeEmptyRanges(ranges) {
     var range = ranges[index];
 
     if (range.start === range.end) {
-      ranges.splice(index++, 1);
+      ranges.splice(index--, 1);
     }
   }
 
@@ -5822,13 +5828,15 @@ var config = {
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+/* unused harmony export asyncScheduler */
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return async; });
 /* harmony import */ var _AsyncAction__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(91);
 /* harmony import */ var _AsyncScheduler__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(90);
 /** PURE_IMPORTS_START _AsyncAction,_AsyncScheduler PURE_IMPORTS_END */
 
 
-var async = /*@__PURE__*/ new _AsyncScheduler__WEBPACK_IMPORTED_MODULE_1__[/* AsyncScheduler */ "a"](_AsyncAction__WEBPACK_IMPORTED_MODULE_0__[/* AsyncAction */ "a"]);
+var asyncScheduler = /*@__PURE__*/ new _AsyncScheduler__WEBPACK_IMPORTED_MODULE_1__[/* AsyncScheduler */ "a"](_AsyncAction__WEBPACK_IMPORTED_MODULE_0__[/* AsyncAction */ "a"]);
+var async = asyncScheduler;
 //# sourceMappingURL=async.js.map
 
 
@@ -5953,6 +5961,7 @@ function byteRange(_ref) {
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return mergeMap; });
 /* unused harmony export MergeMapOperator */
 /* unused harmony export MergeMapSubscriber */
+/* unused harmony export flatMap */
 /* harmony import */ var tslib__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(5);
 /* harmony import */ var _util_subscribeToResult__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(30);
 /* harmony import */ var _OuterSubscriber__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31);
@@ -6061,6 +6070,7 @@ var MergeMapSubscriber = /*@__PURE__*/ (function (_super) {
     return MergeMapSubscriber;
 }(_OuterSubscriber__WEBPACK_IMPORTED_MODULE_2__[/* OuterSubscriber */ "a"]));
 
+var flatMap = mergeMap;
 //# sourceMappingURL=mergeMap.js.map
 
 
@@ -6754,7 +6764,8 @@ var AsapScheduler_AsapScheduler = /*@__PURE__*/ (function (_super) {
 /** PURE_IMPORTS_START _AsapAction,_AsapScheduler PURE_IMPORTS_END */
 
 
-var asap = /*@__PURE__*/ new AsapScheduler_AsapScheduler(AsapAction_AsapAction);
+var asapScheduler = /*@__PURE__*/ new AsapScheduler_AsapScheduler(AsapAction_AsapAction);
+var asap = asapScheduler;
 //# sourceMappingURL=asap.js.map
 
 // EXTERNAL MODULE: ./node_modules/rxjs/_esm5/internal/Observable.js + 3 modules
@@ -6921,7 +6932,7 @@ function deferSubscriptions() {
     // This is not dramatic but it could be better.
     // Either this is a problem with RxJS or this was wanted, in which case we
     // may need to add our own scheduler.
-    return source.pipe(subscribeOn(asap));
+    return source.pipe(subscribeOn(asapScheduler));
   };
 }
 
@@ -8551,6 +8562,11 @@ function guessBufferedEndFromRangeEnd(lastSegmentInRange, rangeEnd) {
 
 var APPEND_WINDOW_SECURITIES = config["a" /* default */].APPEND_WINDOW_SECURITIES,
     SOURCE_BUFFER_FLUSHING_INTERVAL = config["a" /* default */].SOURCE_BUFFER_FLUSHING_INTERVAL;
+/**
+ * Enum used internally by the QueuedSourceBuffer as a discriminant in its
+ * queue of "actions".
+ */
+
 var SourceBufferAction;
 
 (function (SourceBufferAction) {
@@ -8729,7 +8745,7 @@ var queued_source_buffer_QueuedSourceBuffer = /*#__PURE__*/function () {
 
     this._destroy$.complete();
 
-    if (this._pendingTask != null) {
+    if (this._pendingTask !== null) {
       this._pendingTask.subject.complete();
 
       this._pendingTask = null;
@@ -8738,7 +8754,7 @@ var queued_source_buffer_QueuedSourceBuffer = /*#__PURE__*/function () {
     while (this._queue.length > 0) {
       var nextElement = this._queue.shift();
 
-      if (nextElement != null) {
+      if (nextElement !== undefined) {
         nextElement.subject.complete();
       }
     }
@@ -8766,7 +8782,7 @@ var queued_source_buffer_QueuedSourceBuffer = /*#__PURE__*/function () {
     var error = err instanceof Error ? err : new Error("An unknown error occured when appending buffer");
     this._lastInitSegment = null; // initialize init segment as a security
 
-    if (this._pendingTask != null) {
+    if (this._pendingTask !== null) {
       this._pendingTask.subject.error(error);
     }
   }
@@ -8786,7 +8802,7 @@ var queued_source_buffer_QueuedSourceBuffer = /*#__PURE__*/function () {
     var _this2 = this;
 
     return new Observable["a" /* Observable */](function (obs) {
-      var shouldRestartQueue = _this2._queue.length === 0 && _this2._pendingTask == null;
+      var shouldRestartQueue = _this2._queue.length === 0 && _this2._pendingTask === null;
       var subject = new Subject["a" /* Subject */]();
       var queueItem = Object(object_assign["a" /* default */])({
         subject: subject
@@ -8823,7 +8839,7 @@ var queued_source_buffer_QueuedSourceBuffer = /*#__PURE__*/function () {
     } // handle end of previous task if needed
 
 
-    if (this._pendingTask != null) {
+    if (this._pendingTask !== null) {
       if (this._pendingTask.type !== SourceBufferAction.Push || this._pendingTask.steps.length === 0) {
         switch (this._pendingTask.type) {
           case SourceBufferAction.Push:
@@ -8860,7 +8876,7 @@ var queued_source_buffer_QueuedSourceBuffer = /*#__PURE__*/function () {
     } else {
       var newQueueItem = this._queue.shift();
 
-      if (newQueueItem == null) {
+      if (newQueueItem === undefined) {
         // TODO TypeScrypt do not get the previous length check. Find solution /
         // open issue
         throw new Error("An item from the QueuedSourceBuffer queue was not defined");
@@ -8868,7 +8884,7 @@ var queued_source_buffer_QueuedSourceBuffer = /*#__PURE__*/function () {
 
       this._pendingTask = convertQueueItemToTask(newQueueItem);
 
-      if (this._pendingTask == null) {
+      if (this._pendingTask === null) {
         // nothing to do, complete and go to next item
         newQueueItem.subject.next();
         newQueueItem.subject.complete();
@@ -8895,7 +8911,7 @@ var queued_source_buffer_QueuedSourceBuffer = /*#__PURE__*/function () {
         case SourceBufferAction.Push:
           var nextStep = task.steps.shift();
 
-          if (nextStep == null || nextStep.isInit && this._lastInitSegment === nextStep.segmentData) {
+          if (nextStep === undefined || nextStep.isInit && this._lastInitSegment === nextStep.segmentData) {
             this._flush();
 
             return;
@@ -8953,7 +8969,7 @@ var queued_source_buffer_QueuedSourceBuffer = /*#__PURE__*/function () {
       this._sourceBuffer.timestampOffset = newTimestampOffset;
     }
 
-    if (appendWindow[0] == null) {
+    if (appendWindow[0] === undefined) {
       if (this._sourceBuffer.appendWindowStart > 0) {
         this._sourceBuffer.appendWindowStart = 0;
       }
@@ -8965,7 +8981,7 @@ var queued_source_buffer_QueuedSourceBuffer = /*#__PURE__*/function () {
       this._sourceBuffer.appendWindowStart = appendWindow[0];
     }
 
-    if (appendWindow[1] == null) {
+    if (appendWindow[1] === undefined) {
       if (this._sourceBuffer.appendWindowEnd !== Infinity) {
         this._sourceBuffer.appendWindowEnd = Infinity;
       }
@@ -15454,7 +15470,14 @@ var subscribeToIterable = function (iterable) {
     return function (subscriber) {
         var iterator = iterable[symbol_iterator["a" /* iterator */]]();
         do {
-            var item = iterator.next();
+            var item = void 0;
+            try {
+                item = iterator.next();
+            }
+            catch (err) {
+                subscriber.error(err);
+                return subscriber;
+            }
             if (item.done) {
                 subscriber.complete();
                 break;
@@ -24142,7 +24165,7 @@ var SimpleSet = /*#__PURE__*/function () {
   }
   /**
    * Remove an hash entry from the set.
-   * Do not have any effect on already-removed or inexistant hashes
+   * Do not have any effect on already-removed or inexistent hashes
    * @param {string|number} x
    */
   ;
@@ -24378,32 +24401,78 @@ function filterGarbageCollectedSegments(consideredSegments, neededRange) {
   var completeSegments = [];
 
   for (var i = 0; i < consideredSegments.length; i++) {
-    var segmentStartIsComplete = true;
-    var segmentEndIsComplete = true;
     var currentSeg = consideredSegments[i];
     var prevSeg = i === 0 ? null : consideredSegments[i - 1];
     var nextSeg = i >= consideredSegments.length - 1 ? null : consideredSegments[i + 1];
 
-    if (currentSeg.bufferedStart === undefined) {
-      segmentStartIsComplete = false;
-    } else if ((prevSeg === null || prevSeg.bufferedEnd === undefined || prevSeg.bufferedEnd !== currentSeg.bufferedStart) && neededRange.start < currentSeg.bufferedStart && currentSeg.bufferedStart - currentSeg.start > MAX_TIME_MISSING_FROM_COMPLETE_SEGMENT) {
-      log["a" /* default */].info("Buffer: The start of the wanted segment has been garbage collected", currentSeg);
-      segmentStartIsComplete = false;
-    }
-
-    if (currentSeg.bufferedEnd === undefined) {
-      segmentEndIsComplete = false;
-    } else if ((nextSeg === null || nextSeg.bufferedEnd === undefined || nextSeg.bufferedEnd !== currentSeg.bufferedStart) && neededRange.end > currentSeg.bufferedEnd && currentSeg.end - currentSeg.bufferedEnd > MAX_TIME_MISSING_FROM_COMPLETE_SEGMENT) {
-      log["a" /* default */].info("Buffer: The end of the wanted segment has been garbage collected", currentSeg);
-      segmentEndIsComplete = false;
-    }
-
-    if (segmentStartIsComplete && segmentEndIsComplete) {
+    if (!isStartGarbageCollected(currentSeg, prevSeg, neededRange.start) && !isEndGarbageCollected(currentSeg, nextSeg, neededRange.end)) {
       completeSegments.push(currentSeg);
     }
   }
 
   return completeSegments;
+}
+/**
+ * From buffered segment information, return `true` if the given `currentSeg`
+ * might have been garbage collected at the start.
+ * Return `false` if the segment is complete at least from `maximumStartTime`.
+ * @param {Object} currentSeg - The segment information for the segment in
+ * question.
+ * @param {Object|null} prevSeg - The segment information for the previous
+ * buffered segment, if one (`null` if none).
+ * @param {number} maximumStartTime - Only consider the data after that time.
+ * If `currentSeg` has only been garbage collected for some data which is before
+ * that time, we will return `false`.
+ */
+
+
+function isStartGarbageCollected(currentSeg, prevSeg, maximumStartTime) {
+  if (currentSeg.bufferedStart === undefined) {
+    log["a" /* default */].warn("Buffer: Start of a segment unknown. " + "Assuming it is garbage collected by default.", currentSeg);
+    return true;
+  }
+
+  if (prevSeg !== null && prevSeg.bufferedEnd !== undefined && currentSeg.bufferedStart - prevSeg.bufferedEnd < 0.1) {
+    return false;
+  }
+
+  if (maximumStartTime < currentSeg.bufferedStart && currentSeg.bufferedStart - currentSeg.start > MAX_TIME_MISSING_FROM_COMPLETE_SEGMENT) {
+    log["a" /* default */].info("Buffer: The start of the wanted segment has been garbage collected", currentSeg);
+    return true;
+  }
+
+  return false;
+}
+/**
+ * From buffered segment information, return `true` if the given `currentSeg`
+ * might have been garbage collected at the end.
+ * Return `false` if the segment is complete at least until `minimumEndTime`.
+ * @param {Object} currentSeg - The segment information for the segment in
+ * question.
+ * @param {Object|null} nextSeg - The segment information for the next buffered
+ * segment, if one (`null` if none).
+ * @param {number} minimumEndTime - Only consider the data before that time.
+ * If `currentSeg` has only been garbage collected for some data which is after
+ * that time, we will return `false`.
+ */
+
+
+function isEndGarbageCollected(currentSeg, nextSeg, minimumEndTime) {
+  if (currentSeg.bufferedEnd === undefined) {
+    log["a" /* default */].warn("Buffer: End of a segment unknown. " + "Assuming it is garbage collected by default.", currentSeg);
+    return true;
+  }
+
+  if (nextSeg !== null && nextSeg.bufferedStart !== undefined && nextSeg.bufferedStart - currentSeg.bufferedEnd < 0.1) {
+    return false;
+  }
+
+  if (minimumEndTime > currentSeg.bufferedEnd && currentSeg.end - currentSeg.bufferedEnd > MAX_TIME_MISSING_FROM_COMPLETE_SEGMENT) {
+    log["a" /* default */].info("Buffer: The end of the wanted segment has been garbage collected", currentSeg);
+    return true;
+  }
+
+  return false;
 }
 /**
  * From the given SegmentInventory, filters the buffered Segment Object which
@@ -29338,7 +29407,8 @@ var QueueScheduler_QueueScheduler = /*@__PURE__*/ (function (_super) {
 /** PURE_IMPORTS_START _QueueAction,_QueueScheduler PURE_IMPORTS_END */
 
 
-var queue = /*@__PURE__*/ new QueueScheduler_QueueScheduler(QueueAction_QueueAction);
+var queueScheduler = /*@__PURE__*/ new QueueScheduler_QueueScheduler(QueueAction_QueueAction);
+var queue = queueScheduler;
 //# sourceMappingURL=queue.js.map
 
 // EXTERNAL MODULE: ./node_modules/rxjs/_esm5/internal/Subscription.js + 1 modules
@@ -29706,9 +29776,11 @@ function shareReplayOperator(_a) {
     var isComplete = false;
     return function shareReplayOperation(source) {
         refCount++;
+        var innerSub;
         if (!subject || hasError) {
             hasError = false;
             subject = new _ReplaySubject__WEBPACK_IMPORTED_MODULE_0__[/* ReplaySubject */ "a"](bufferSize, windowTime, scheduler);
+            innerSub = subject.subscribe(this);
             subscription = source.subscribe({
                 next: function (value) { subject.next(value); },
                 error: function (err) {
@@ -29722,7 +29794,9 @@ function shareReplayOperator(_a) {
                 },
             });
         }
-        var innerSub = subject.subscribe(this);
+        else {
+            innerSub = subject.subscribe(this);
+        }
         this.add(function () {
             refCount--;
             innerSub.unsubscribe();
@@ -31065,6 +31139,24 @@ var runtime = (function (exports) {
   var asyncIteratorSymbol = $Symbol.asyncIterator || "@@asyncIterator";
   var toStringTagSymbol = $Symbol.toStringTag || "@@toStringTag";
 
+  function define(obj, key, value) {
+    Object.defineProperty(obj, key, {
+      value: value,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    });
+    return obj[key];
+  }
+  try {
+    // IE 8 has a broken Object.defineProperty that only works on DOM objects.
+    define({}, "");
+  } catch (err) {
+    define = function(obj, key, value) {
+      return obj[key] = value;
+    };
+  }
+
   function wrap(innerFn, outerFn, self, tryLocsList) {
     // If outerFn provided and outerFn.prototype is a Generator, then outerFn.prototype instanceof Generator.
     var protoGenerator = outerFn && outerFn.prototype instanceof Generator ? outerFn : Generator;
@@ -31135,16 +31227,19 @@ var runtime = (function (exports) {
     Generator.prototype = Object.create(IteratorPrototype);
   GeneratorFunction.prototype = Gp.constructor = GeneratorFunctionPrototype;
   GeneratorFunctionPrototype.constructor = GeneratorFunction;
-  GeneratorFunctionPrototype[toStringTagSymbol] =
-    GeneratorFunction.displayName = "GeneratorFunction";
+  GeneratorFunction.displayName = define(
+    GeneratorFunctionPrototype,
+    toStringTagSymbol,
+    "GeneratorFunction"
+  );
 
   // Helper for defining the .next, .throw, and .return methods of the
   // Iterator interface in terms of a single ._invoke method.
   function defineIteratorMethods(prototype) {
     ["next", "throw", "return"].forEach(function(method) {
-      prototype[method] = function(arg) {
+      define(prototype, method, function(arg) {
         return this._invoke(method, arg);
-      };
+      });
     });
   }
 
@@ -31163,9 +31258,7 @@ var runtime = (function (exports) {
       Object.setPrototypeOf(genFun, GeneratorFunctionPrototype);
     } else {
       genFun.__proto__ = GeneratorFunctionPrototype;
-      if (!(toStringTagSymbol in genFun)) {
-        genFun[toStringTagSymbol] = "GeneratorFunction";
-      }
+      define(genFun, toStringTagSymbol, "GeneratorFunction");
     }
     genFun.prototype = Object.create(Gp);
     return genFun;
@@ -31435,7 +31528,7 @@ var runtime = (function (exports) {
   // unified ._invoke helper method.
   defineIteratorMethods(Gp);
 
-  Gp[toStringTagSymbol] = "Generator";
+  define(Gp, toStringTagSymbol, "Generator");
 
   // A Generator should always return itself as the iterator object when the
   // @@iterator function is called on it. Some browsers' implementations of the
@@ -34780,9 +34873,6 @@ function parseContentProtection(contentProtectionElement) {
     attributes: attributes
   }, childrenWarnings];
 }
-// EXTERNAL MODULE: ./src/utils/object_assign.ts
-var object_assign = __webpack_require__(9);
-
 // CONCATENATED MODULE: ./src/parsers/manifest/dash/node_parsers/Initialization.ts
 /**
  * Copyright 2015 CANAL+ Group
@@ -34846,7 +34936,6 @@ function parseInitialization(root) {
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 
 
 /**
@@ -34946,17 +35035,11 @@ function parseSegmentBase(root) {
     }
   }
 
-  var timescale = attributes.timescale == null ? 1 : attributes.timescale;
-  var indexRangeExact = attributes.indexRangeExact === true;
-  var availabilityTimeComplete = attributes.availabilityTimeComplete == null ? true : attributes.availabilityTimeComplete;
-  var ret = Object(object_assign["a" /* default */])(attributes, {
-    availabilityTimeComplete: availabilityTimeComplete,
-    indexRangeExact: indexRangeExact,
-    timeline: [],
-    timescale: timescale
-  });
-  return [ret, warnings];
+  return [attributes, warnings];
 }
+// EXTERNAL MODULE: ./src/utils/object_assign.ts
+var object_assign = __webpack_require__(9);
+
 // CONCATENATED MODULE: ./src/parsers/manifest/dash/node_parsers/SegmentURL.ts
 /**
  * Copyright 2015 CANAL+ Group
@@ -35159,36 +35242,22 @@ function parseSegmentTemplate(root) {
 
   var warnings = segmentBaseWarnings;
   var ret;
-  var parseTimeline; // First look for a possible SegmentTimeline
+  var timelineParser; // First look for a possible SegmentTimeline
 
   for (var i = 0; i < root.childNodes.length; i++) {
     if (root.childNodes[i].nodeType === Node.ELEMENT_NODE) {
       var currentNode = root.childNodes[i];
 
       if (currentNode.nodeName === "SegmentTimeline") {
-        parseTimeline = createSegmentTimelineParser(currentNode);
+        timelineParser = createSegmentTimelineParser(currentNode);
       }
     }
   }
 
-  if (parseTimeline != null) {
-    ret = Object(object_assign["a" /* default */])({}, base, {
-      indexType: "timeline",
-      parseTimeline: parseTimeline
-    });
-  } else {
-    var segmentDuration = base.duration;
-
-    if (segmentDuration === undefined) {
-      throw new Error("Invalid SegmentTemplate: no duration");
-    }
-
-    ret = Object(object_assign["a" /* default */])({}, base, {
-      indexType: "template",
-      duration: segmentDuration
-    });
-  }
-
+  ret = Object(object_assign["a" /* default */])({}, base, {
+    duration: base.duration,
+    timelineParser: timelineParser
+  });
   var parseValue = ValueParser(ret, warnings);
 
   for (var _i = 0; _i < root.attributes.length; _i++) {
@@ -35982,6 +36051,7 @@ function parseEventStream(element) {
 
 
 
+
 /**
  * @param {NodeList} periodChildren
  * @returns {Array}
@@ -35990,6 +36060,7 @@ function parseEventStream(element) {
 function parsePeriodChildren(periodChildren) {
   var baseURLs = [];
   var adaptations = [];
+  var segmentTemplate;
   var warnings = [];
   var streamEvents = [];
 
@@ -36027,6 +36098,19 @@ function parsePeriodChildren(periodChildren) {
           streamEvents.push.apply(streamEvents, newStreamEvents);
           warnings = warnings.concat(eventStreamWarnings);
           break;
+
+        case "SegmentTemplate":
+          var _parseSegmentTemplate = parseSegmentTemplate(currentElement),
+              parsedSegmentTemplate = _parseSegmentTemplate[0],
+              segmentTemplateWarnings = _parseSegmentTemplate[1];
+
+          segmentTemplate = parsedSegmentTemplate;
+
+          if (segmentTemplateWarnings.length > 0) {
+            warnings = warnings.concat(segmentTemplateWarnings);
+          }
+
+          break;
       }
     }
   }
@@ -36034,7 +36118,8 @@ function parsePeriodChildren(periodChildren) {
   return [{
     baseURLs: baseURLs,
     adaptations: adaptations,
-    streamEvents: streamEvents
+    streamEvents: streamEvents,
+    segmentTemplate: segmentTemplate
   }, warnings];
 }
 /**
@@ -37112,12 +37197,14 @@ var base_BaseRepresentationIndex = /*#__PURE__*/function () {
    * @param {Object} context
    */
   function BaseRepresentationIndex(index, context) {
+    var _a, _b;
+
     var periodStart = context.periodStart,
         periodEnd = context.periodEnd,
         representationBaseURLs = context.representationBaseURLs,
         representationId = context.representationId,
         representationBitrate = context.representationBitrate;
-    var timescale = index.timescale;
+    var timescale = (_a = index.timescale) !== null && _a !== void 0 ? _a : 1;
     var presentationTimeOffset = index.presentationTimeOffset != null ? index.presentationTimeOffset : 0;
     var indexTimeOffset = presentationTimeOffset - periodStart * timescale;
     var mediaURLs = createIndexURLs(representationBaseURLs, index.initialization !== undefined ? index.initialization.media : undefined, representationId, representationBitrate); // TODO If indexRange is either undefined or behind the initialization segment
@@ -37137,7 +37224,7 @@ var base_BaseRepresentationIndex = /*#__PURE__*/function () {
       },
       mediaURLs: createIndexURLs(representationBaseURLs, index.media, representationId, representationBitrate),
       startNumber: index.startNumber,
-      timeline: index.timeline,
+      timeline: (_b = index.timeline) !== null && _b !== void 0 ? _b : [],
       timescale: timescale
     };
     this._scaledPeriodEnd = periodEnd == null ? undefined : Object(index_helpers["e" /* toIndexTime */])(periodEnd, this._index);
@@ -37295,13 +37382,16 @@ var list_ListRepresentationIndex = /*#__PURE__*/function () {
    * @param {Object} context
    */
   function ListRepresentationIndex(index, context) {
+    var _a;
+
     var periodStart = context.periodStart,
         representationBaseURLs = context.representationBaseURLs,
         representationId = context.representationId,
         representationBitrate = context.representationBitrate;
     this._periodStart = periodStart;
     var presentationTimeOffset = index.presentationTimeOffset != null ? index.presentationTimeOffset : 0;
-    var indexTimeOffset = presentationTimeOffset - periodStart * index.timescale;
+    var timescale = (_a = index.timescale) !== null && _a !== void 0 ? _a : 1;
+    var indexTimeOffset = presentationTimeOffset - periodStart * timescale;
     var list = index.list.map(function (lItem) {
       return {
         mediaURLs: createIndexURLs(representationBaseURLs, lItem.media, representationId, representationBitrate),
@@ -37310,7 +37400,7 @@ var list_ListRepresentationIndex = /*#__PURE__*/function () {
     });
     this._index = {
       list: list,
-      timescale: index.timescale,
+      timescale: timescale,
       duration: index.duration,
       indexTimeOffset: indexTimeOffset,
       indexRange: index.indexRange,
@@ -37980,7 +38070,9 @@ var timeline_representation_index_TimelineRepresentationIndex = /*#__PURE__*/fun
    * @param {Object} index
    * @param {Object} context
    */
-  function TimelineRepresentationIndex(index, context) {
+  function TimelineRepresentationIndex(index, timelineParser, context) {
+    var _a;
+
     var manifestBoundsCalculator = context.manifestBoundsCalculator,
         isDynamic = context.isDynamic,
         representationBaseURLs = context.representationBaseURLs,
@@ -37988,7 +38080,7 @@ var timeline_representation_index_TimelineRepresentationIndex = /*#__PURE__*/fun
         representationBitrate = context.representationBitrate,
         periodStart = context.periodStart,
         periodEnd = context.periodEnd;
-    var timescale = index.timescale;
+    var timescale = (_a = index.timescale) !== null && _a !== void 0 ? _a : 1;
     var presentationTimeOffset = index.presentationTimeOffset != null ? index.presentationTimeOffset : 0;
     var scaledStart = periodStart * timescale;
     var indexTimeOffset = presentationTimeOffset - scaledStart;
@@ -38003,7 +38095,7 @@ var timeline_representation_index_TimelineRepresentationIndex = /*#__PURE__*/fun
     }
 
     this._isDynamic = isDynamic;
-    this._parseTimeline = index.parseTimeline;
+    this._parseTimeline = timelineParser;
     this._index = {
       indexRange: index.indexRange,
       indexTimeOffset: indexTimeOffset,
@@ -38419,7 +38511,8 @@ var template_TemplateRepresentationIndex = /*#__PURE__*/function () {
    * @param {Object} context
    */
   function TemplateRepresentationIndex(index, context) {
-    var timescale = index.timescale;
+    var _a;
+
     var aggressiveMode = context.aggressiveMode,
         availabilityTimeOffset = context.availabilityTimeOffset,
         manifestBoundsCalculator = context.manifestBoundsCalculator,
@@ -38429,12 +38522,18 @@ var template_TemplateRepresentationIndex = /*#__PURE__*/function () {
         representationBaseURLs = context.representationBaseURLs,
         representationId = context.representationId,
         representationBitrate = context.representationBitrate;
+    var timescale = (_a = index.timescale) !== null && _a !== void 0 ? _a : 1;
     this._availabilityTimeOffset = availabilityTimeOffset;
     this._manifestBoundsCalculator = manifestBoundsCalculator;
     this._aggressiveMode = aggressiveMode;
     var presentationTimeOffset = index.presentationTimeOffset != null ? index.presentationTimeOffset : 0;
     var scaledStart = periodStart * timescale;
     var indexTimeOffset = presentationTimeOffset - scaledStart;
+
+    if (index.duration === undefined) {
+      throw new Error("Invalid SegmentTemplate: no duration");
+    }
+
     this._index = {
       duration: index.duration,
       timescale: timescale,
@@ -38865,7 +38964,7 @@ function resolveBaseURLs(currentBaseURLs, newBaseURLs) {
 
   return result;
 }
-// CONCATENATED MODULE: ./src/parsers/manifest/dash/parse_representations.ts
+// CONCATENATED MODULE: ./src/parsers/manifest/dash/parse_representation_index.ts
 /**
  * Copyright 2015 CANAL+ Group
  *
@@ -38885,40 +38984,96 @@ function resolveBaseURLs(currentBaseURLs, newBaseURLs) {
 
 
 
-/**
- * Find and parse RepresentationIndex located in an AdaptationSet node.
- * Returns a generic parsed SegmentTemplate with a single element if not found.
- * @param {Object} adaptation
- * @param {Object} context
- */
+function parseRepresentationIndex(representation, representationInfos) {
+  var _a, _b;
 
-function findAdaptationIndex(adaptation, context) {
-  var adaptationChildren = adaptation.children;
-  var adaptationIndex;
+  var representationBaseURLs = resolveBaseURLs(representationInfos.baseURLs, representation.children.baseURLs);
+  var aggressiveMode = representationInfos.aggressiveMode,
+      availabilityTimeOffset = representationInfos.availabilityTimeOffset,
+      manifestBoundsCalculator = representationInfos.manifestBoundsCalculator,
+      isDynamic = representationInfos.isDynamic,
+      periodEnd = representationInfos.end,
+      periodStart = representationInfos.start,
+      receivedTime = representationInfos.receivedTime,
+      timeShiftBufferDepth = representationInfos.timeShiftBufferDepth,
+      unsafelyBaseOnPreviousRepresentation = representationInfos.unsafelyBaseOnPreviousRepresentation;
+  var context = {
+    aggressiveMode: aggressiveMode,
+    availabilityTimeOffset: availabilityTimeOffset,
+    unsafelyBaseOnPreviousRepresentation: unsafelyBaseOnPreviousRepresentation,
+    manifestBoundsCalculator: manifestBoundsCalculator,
+    isDynamic: isDynamic,
+    periodEnd: periodEnd,
+    periodStart: periodStart,
+    receivedTime: receivedTime,
+    representationBaseURLs: representationBaseURLs,
+    representationBitrate: representation.attributes.bitrate,
+    representationId: representation.attributes.id,
+    timeShiftBufferDepth: timeShiftBufferDepth
+  };
+  var representationIndex;
 
-  if (adaptationChildren.segmentBase != null) {
-    var segmentBase = adaptationChildren.segmentBase;
-    adaptationIndex = new base_BaseRepresentationIndex(segmentBase, context);
-  } else if (adaptationChildren.segmentList != null) {
-    var segmentList = adaptationChildren.segmentList;
-    adaptationIndex = new list_ListRepresentationIndex(segmentList, context);
-  } else if (adaptationChildren.segmentTemplate != null) {
-    var segmentTemplate = adaptationChildren.segmentTemplate;
-    adaptationIndex = segmentTemplate.indexType === "timeline" ? new indexes_timeline(segmentTemplate, context) : new template_TemplateRepresentationIndex(segmentTemplate, context);
+  if (representation.children.segmentBase !== undefined) {
+    var segmentBase = representation.children.segmentBase;
+    context.availabilityTimeOffset = representationInfos.availabilityTimeOffset + extractMinimumAvailabilityTimeOffset(representation.children.baseURLs) + ((_a = segmentBase.availabilityTimeOffset) !== null && _a !== void 0 ? _a : 0);
+    representationIndex = new base_BaseRepresentationIndex(segmentBase, context);
+  } else if (representation.children.segmentList !== undefined) {
+    var segmentList = representation.children.segmentList;
+    representationIndex = new list_ListRepresentationIndex(segmentList, context);
+  } else if (representation.children.segmentTemplate !== undefined || representationInfos.parentSegmentTemplates.length > 0) {
+    var segmentTemplates = representationInfos.parentSegmentTemplates.slice();
+    var childSegmentTemplate = representation.children.segmentTemplate;
+
+    if (childSegmentTemplate !== undefined) {
+      segmentTemplates.push(childSegmentTemplate);
+    }
+
+    var segmentTemplate = object_assign["a" /* default */].apply(void 0, [{}].concat(segmentTemplates));
+    context.availabilityTimeOffset = representationInfos.availabilityTimeOffset + extractMinimumAvailabilityTimeOffset(representation.children.baseURLs) + ((_b = segmentTemplate.availabilityTimeOffset) !== null && _b !== void 0 ? _b : 0);
+    representationIndex = segmentTemplate.timelineParser !== undefined ? new indexes_timeline(segmentTemplate, segmentTemplate.timelineParser, context) : new template_TemplateRepresentationIndex(segmentTemplate, context);
   } else {
-    adaptationIndex = new template_TemplateRepresentationIndex({
-      duration: Number.MAX_VALUE,
-      timescale: 1,
-      startNumber: 0,
-      initialization: {
+    var adaptationChildren = representationInfos.adaptation.children;
+
+    if (adaptationChildren.segmentBase !== undefined) {
+      var _segmentBase = adaptationChildren.segmentBase;
+      representationIndex = new base_BaseRepresentationIndex(_segmentBase, context);
+    } else if (adaptationChildren.segmentList !== undefined) {
+      var _segmentList = adaptationChildren.segmentList;
+      representationIndex = new list_ListRepresentationIndex(_segmentList, context);
+    } else {
+      representationIndex = new template_TemplateRepresentationIndex({
+        duration: Number.MAX_VALUE,
+        timescale: 1,
+        startNumber: 0,
+        initialization: {
+          media: ""
+        },
         media: ""
-      },
-      media: ""
-    }, context);
+      }, context);
+    }
   }
 
-  return adaptationIndex;
+  return representationIndex;
 }
+// CONCATENATED MODULE: ./src/parsers/manifest/dash/parse_representations.ts
+/**
+ * Copyright 2015 CANAL+ Group
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+
 /**
  * Process intermediate periods to create final parsed periods.
  * @param {Array.<Object>} periodsIR
@@ -38926,15 +39081,13 @@ function findAdaptationIndex(adaptation, context) {
  * @returns {Array.<Object>}
  */
 
-
 function parseRepresentations(representationsIR, adaptation, adaptationInfos) {
-  var _a, _b, _c, _d;
+  var _a, _b;
 
   var parsedRepresentations = [];
 
   var _loop = function _loop(representationIdx) {
-    var representation = representationsIR[representationIdx];
-    var representationBaseURLs = resolveBaseURLs(adaptationInfos.baseURLs, representation.children.baseURLs); // 1. Get ID
+    var representation = representationsIR[representationIdx]; // Compute Representation ID
 
     var representationID = representation.attributes.id != null ? representation.attributes.id : String(representation.attributes.bitrate) + (representation.attributes.height != null ? "-" + representation.attributes.height : "") + (representation.attributes.width != null ? "-" + representation.attributes.width : "") + (representation.attributes.mimeType != null ? "-" + representation.attributes.mimeType : "") + (representation.attributes.codecs != null ? "-" + representation.attributes.codecs : ""); // Avoid duplicate IDs
 
@@ -38942,47 +39095,15 @@ function parseRepresentations(representationsIR, adaptation, adaptationInfos) {
       return r.id === representationID;
     })) {
       representationID += "-dup";
-    } // 2. Retrieve previous version of the Representation, if one.
+    } // Retrieve previous version of the Representation, if one.
 
 
-    var unsafelyBaseOnPreviousRepresentation = (_b = (_a = adaptationInfos.unsafelyBaseOnPreviousAdaptation) === null || _a === void 0 ? void 0 : _a.getRepresentation(representationID)) !== null && _b !== void 0 ? _b : null; // 3. Find Index
-
-    var context = {
-      aggressiveMode: adaptationInfos.aggressiveMode,
-      availabilityTimeOffset: adaptationInfos.availabilityTimeOffset,
+    var unsafelyBaseOnPreviousRepresentation = (_b = (_a = adaptationInfos.unsafelyBaseOnPreviousAdaptation) === null || _a === void 0 ? void 0 : _a.getRepresentation(representationID)) !== null && _b !== void 0 ? _b : null;
+    var representationInfos = Object(object_assign["a" /* default */])({}, adaptationInfos, {
       unsafelyBaseOnPreviousRepresentation: unsafelyBaseOnPreviousRepresentation,
-      manifestBoundsCalculator: adaptationInfos.manifestBoundsCalculator,
-      isDynamic: adaptationInfos.isDynamic,
-      periodEnd: adaptationInfos.end,
-      periodStart: adaptationInfos.start,
-      receivedTime: adaptationInfos.receivedTime,
-      representationBaseURLs: representationBaseURLs,
-      representationBitrate: representation.attributes.bitrate,
-      representationId: representation.attributes.id,
-      timeShiftBufferDepth: adaptationInfos.timeShiftBufferDepth
-    };
-    var representationIndex = void 0;
-
-    if (representation.children.segmentBase != null) {
-      var segmentBase = representation.children.segmentBase;
-      context.availabilityTimeOffset = adaptationInfos.availabilityTimeOffset + extractMinimumAvailabilityTimeOffset(representation.children.baseURLs) + ((_c = segmentBase.availabilityTimeOffset) !== null && _c !== void 0 ? _c : 0);
-      representationIndex = new base_BaseRepresentationIndex(segmentBase, context);
-    } else if (representation.children.segmentList != null) {
-      var segmentList = representation.children.segmentList;
-      representationIndex = new list_ListRepresentationIndex(segmentList, context);
-    } else if (representation.children.segmentTemplate != null) {
-      var segmentTemplate = representation.children.segmentTemplate;
-
-      if (segmentTemplate.indexType === "timeline") {
-        representationIndex = new indexes_timeline(segmentTemplate, context);
-      } else {
-        context.availabilityTimeOffset = adaptationInfos.availabilityTimeOffset + extractMinimumAvailabilityTimeOffset(representation.children.baseURLs) + ((_d = segmentTemplate.availabilityTimeOffset) !== null && _d !== void 0 ? _d : 0);
-        representationIndex = new template_TemplateRepresentationIndex(segmentTemplate, context);
-      }
-    } else {
-      representationIndex = findAdaptationIndex(adaptation, context);
-    } // 3. Find bitrate
-
+      adaptation: adaptation
+    });
+    var representationIndex = parseRepresentationIndex(representation, representationInfos); // Find bitrate
 
     var representationBitrate = void 0;
 
@@ -38991,14 +39112,14 @@ function parseRepresentations(representationsIR, adaptation, adaptationInfos) {
       representationBitrate = 0;
     } else {
       representationBitrate = representation.attributes.bitrate;
-    } // 4. Construct Representation Base
+    } // Construct Representation Base
 
 
     var parsedRepresentation = {
       bitrate: representationBitrate,
       index: representationIndex,
       id: representationID
-    }; // 5. Add optional attributes
+    }; // Add optional attributes
 
     var codecs = void 0;
 
@@ -39297,6 +39418,16 @@ function parseAdaptationSets(adaptationsIR, periodInfos) {
     var originalID = adaptation.attributes.id;
     var newID = void 0;
     var adaptationSetSwitchingIDs = getAdaptationSetSwitchingIDs(adaptation);
+    var parentSegmentTemplates = [];
+
+    if (periodInfos.segmentTemplate !== undefined) {
+      parentSegmentTemplates.push(periodInfos.segmentTemplate);
+    }
+
+    if (adaptation.children.segmentTemplate !== undefined) {
+      parentSegmentTemplates.push(adaptation.children.segmentTemplate);
+    }
+
     var adaptationInfos = {
       aggressiveMode: periodInfos.aggressiveMode,
       availabilityTimeOffset: availabilityTimeOffset,
@@ -39304,6 +39435,7 @@ function parseAdaptationSets(adaptationsIR, periodInfos) {
       manifestBoundsCalculator: periodInfos.manifestBoundsCalculator,
       end: periodInfos.end,
       isDynamic: periodInfos.isDynamic,
+      parentSegmentTemplates: parentSegmentTemplates,
       receivedTime: periodInfos.receivedTime,
       start: periodInfos.start,
       timeShiftBufferDepth: periodInfos.timeShiftBufferDepth,
@@ -39537,6 +39669,7 @@ function parsePeriods(periodsIR, contextInfos) {
       end: periodEnd,
       isDynamic: isDynamic,
       receivedTime: receivedTime,
+      segmentTemplate: periodIR.children.segmentTemplate,
       start: periodStart,
       timeShiftBufferDepth: timeShiftBufferDepth,
       unsafelyBaseOnPreviousPeriod: unsafelyBaseOnPreviousPeriod
@@ -50876,8 +51009,8 @@ function applyGeneralStyle(element, style) {
 
   var writingMode = style.writingMode;
 
-  if (Object(is_non_empty_string["a" /* default */])(writingMode)) {} // TODO
-  // applies to region
+  if (Object(is_non_empty_string["a" /* default */])(writingMode)) {// TODO
+  } // applies to region
 
 
   var overflow = style.overflow;
@@ -54840,7 +54973,6 @@ function getInitData(encryptedEvent) {
  */
 
 function patchInitData(initData) {
-  var initialLength = initData.byteLength;
   _log__WEBPACK_IMPORTED_MODULE_1__[/* default */ "a"].info("Compat: Trying to move CENC PSSH from init data at the end of it.");
   var cencs = new Uint8Array();
   var resInitData = new Uint8Array();
@@ -54873,11 +55005,6 @@ function patchInitData(initData) {
 
   if (offset !== initData.length) {
     _log__WEBPACK_IMPORTED_MODULE_1__[/* default */ "a"].warn("Compat: unrecognized initialization data. Cannot patch it.");
-    throw new Error("Compat: unrecognized initialization data. Cannot patch it.");
-  }
-
-  if (resInitData.byteLength === initialLength) {
-    _log__WEBPACK_IMPORTED_MODULE_1__[/* default */ "a"].warn("Compat: CENC PSSH not found. Cannot patch it");
     throw new Error("Compat: unrecognized initialization data. Cannot patch it.");
   }
 
