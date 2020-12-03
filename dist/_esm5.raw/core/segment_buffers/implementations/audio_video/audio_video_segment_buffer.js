@@ -26,8 +26,8 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
-import { fromEvent, interval, Observable, Subject, } from "rxjs";
-import { takeUntil, tap, } from "rxjs/operators";
+import { fromEvent, interval, Observable, Subject } from "rxjs";
+import { takeUntil, tap } from "rxjs/operators";
 import { tryToChangeSourceBufferType, } from "../../../../compat";
 import config from "../../../../config";
 import log from "../../../../log";
@@ -58,7 +58,13 @@ var AudioVideoSegmentBuffer = /** @class */ (function (_super) {
      */
     function AudioVideoSegmentBuffer(bufferType, codec, mediaSource) {
         var _this = _super.call(this) || this;
-        var sourceBuffer = mediaSource.addSourceBuffer(codec);
+        var sourceBuffer;
+        if (bufferType === "video") {
+            sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42E01E"');
+        }
+        else {
+            sourceBuffer = mediaSource.addSourceBuffer(codec);
+        }
         _this._destroy$ = new Subject();
         _this.bufferType = bufferType;
         _this._mediaSource = mediaSource;
@@ -73,9 +79,15 @@ var AudioVideoSegmentBuffer = /** @class */ (function (_super) {
         // stay locked in a waiting state.
         // This interval is here to check at regular intervals if the underlying
         // SourceBuffer is currently updating.
-        interval(SOURCE_BUFFER_FLUSHING_INTERVAL).pipe(tap(function () { return _this._flush(); }), takeUntil(_this._destroy$)).subscribe();
-        fromEvent(_this._sourceBuffer, "error").pipe(tap(function (err) { return _this._onPendingTaskError(err); }), takeUntil(_this._destroy$)).subscribe();
-        fromEvent(_this._sourceBuffer, "updateend").pipe(tap(function () { return _this._flush(); }), takeUntil(_this._destroy$)).subscribe();
+        interval(SOURCE_BUFFER_FLUSHING_INTERVAL)
+            .pipe(tap(function () { return _this._flush(); }), takeUntil(_this._destroy$))
+            .subscribe();
+        fromEvent(_this._sourceBuffer, "error")
+            .pipe(tap(function (err) { return _this._onPendingTaskError(err); }), takeUntil(_this._destroy$))
+            .subscribe();
+        fromEvent(_this._sourceBuffer, "updateend")
+            .pipe(tap(function () { return _this._flush(); }), takeUntil(_this._destroy$))
+            .subscribe();
         return _this;
     }
     /**
@@ -106,8 +118,10 @@ var AudioVideoSegmentBuffer = /** @class */ (function (_super) {
      */
     AudioVideoSegmentBuffer.prototype.pushChunk = function (infos) {
         log.debug("AVSB: receiving order to push data to the SourceBuffer", this.bufferType, infos);
-        return this._addToQueue({ type: SegmentBufferOperation.Push,
-            value: infos });
+        return this._addToQueue({
+            type: SegmentBufferOperation.Push,
+            value: infos,
+        });
     };
     /**
      * Remove buffered data (added to the same FIFO queue than `pushChunk`).
@@ -117,7 +131,10 @@ var AudioVideoSegmentBuffer = /** @class */ (function (_super) {
      */
     AudioVideoSegmentBuffer.prototype.removeBuffer = function (start, end) {
         log.debug("AVSB: receiving order to remove data from the SourceBuffer", this.bufferType, start, end);
-        return this._addToQueue({ type: SegmentBufferOperation.Remove, value: { start: start, end: end } });
+        return this._addToQueue({
+            type: SegmentBufferOperation.Remove,
+            value: { start: start, end: end },
+        });
     };
     /**
      * Indicate that every chunks from a Segment has been given to pushChunk so
@@ -130,8 +147,10 @@ var AudioVideoSegmentBuffer = /** @class */ (function (_super) {
      */
     AudioVideoSegmentBuffer.prototype.endOfSegment = function (infos) {
         log.debug("AVSB: receiving order for validating end of segment", this.bufferType, infos.segment);
-        return this._addToQueue({ type: SegmentBufferOperation.EndOfSegment,
-            value: infos });
+        return this._addToQueue({
+            type: SegmentBufferOperation.EndOfSegment,
+            value: infos,
+        });
     };
     /**
      * Returns the currently buffered data, in a TimeRanges object.
@@ -159,9 +178,9 @@ var AudioVideoSegmentBuffer = /** @class */ (function (_super) {
             }
         };
         var queued = this._queue.map(parseQueuedOperation);
-        return this._pendingTask === null ?
-            queued :
-            [parseQueuedOperation(this._pendingTask)].concat(queued);
+        return this._pendingTask === null
+            ? queued
+            : [parseQueuedOperation(this._pendingTask)].concat(queued);
     };
     /**
      * Dispose of the resources used by this AudioVideoSegmentBuffer.
@@ -199,9 +218,9 @@ var AudioVideoSegmentBuffer = /** @class */ (function (_super) {
     AudioVideoSegmentBuffer.prototype._onPendingTaskError = function (err) {
         this._lastInitSegment = null; // initialize init segment as a security
         if (this._pendingTask !== null) {
-            var error = err instanceof Error ?
-                err :
-                new Error("An unknown error occured when doing operations " +
+            var error = err instanceof Error
+                ? err
+                : new Error("An unknown error occured when doing operations " +
                     "on the SourceBuffer");
             this._pendingTask.subject.error(error);
         }
@@ -219,8 +238,7 @@ var AudioVideoSegmentBuffer = /** @class */ (function (_super) {
     AudioVideoSegmentBuffer.prototype._addToQueue = function (operation) {
         var _this = this;
         return new Observable(function (obs) {
-            var shouldRestartQueue = _this._queue.length === 0 &&
-                _this._pendingTask === null;
+            var shouldRestartQueue = _this._queue.length === 0 && _this._pendingTask === null;
             var subject = new Subject();
             var queueItem = objectAssign({ subject: subject }, operation);
             _this._queue.push(queueItem);
@@ -276,7 +294,8 @@ var AudioVideoSegmentBuffer = /** @class */ (function (_super) {
                 return;
             }
         }
-        else { // if this._pendingTask is null, go to next item in queue
+        else {
+            // if this._pendingTask is null, go to next item in queue
             var nextItem = this._queue.shift();
             if (nextItem === undefined) {
                 return; // we have nothing left to do
@@ -291,17 +310,15 @@ var AudioVideoSegmentBuffer = /** @class */ (function (_super) {
                     dataToPush = this._preparePushOperation(itemValue.data);
                 }
                 catch (e) {
-                    this._pendingTask = objectAssign({ data: [],
-                        inventoryData: itemValue.inventoryInfos }, nextItem);
-                    var error = e instanceof Error ?
-                        e :
-                        new Error("An unknown error occured when preparing a push operation");
+                    this._pendingTask = objectAssign({ data: [], inventoryData: itemValue.inventoryInfos }, nextItem);
+                    var error = e instanceof Error
+                        ? e
+                        : new Error("An unknown error occured when preparing a push operation");
                     this._lastInitSegment = null; // initialize init segment as a security
                     nextItem.subject.error(error);
                     return;
                 }
-                this._pendingTask = objectAssign({ data: dataToPush,
-                    inventoryData: itemValue.inventoryInfos }, nextItem);
+                this._pendingTask = objectAssign({ data: dataToPush, inventoryData: itemValue.inventoryInfos }, nextItem);
             }
         }
         try {
@@ -389,8 +406,7 @@ var AudioVideoSegmentBuffer = /** @class */ (function (_super) {
             var segmentData = data.initSegment;
             dataToPush.push(segmentData);
             var initU8 = toUint8Array(segmentData);
-            this._lastInitSegment = { data: initU8,
-                hash: hashBuffer(initU8) };
+            this._lastInitSegment = { data: initU8, hash: hashBuffer(initU8) };
         }
         if (data.chunk !== null) {
             dataToPush.push(data.chunk);
