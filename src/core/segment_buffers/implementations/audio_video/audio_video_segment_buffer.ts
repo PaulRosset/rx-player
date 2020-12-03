@@ -14,17 +14,8 @@
  * limitations under the License.
  */
 
-import {
-  fromEvent,
-  interval,
-  Observable,
-  Observer,
-  Subject,
-} from "rxjs";
-import {
-  takeUntil,
-  tap,
-} from "rxjs/operators";
+import { fromEvent, interval, Observable, Observer, Subject } from "rxjs";
+import { takeUntil, tap } from "rxjs/operators";
 import {
   ICompatSourceBuffer,
   tryToChangeSourceBufferType,
@@ -71,9 +62,10 @@ type IAVSBQueueItem = ISBOperation<BufferSource> & { subject: Subject<void> };
  * split up into multiple tasks depending on the need to push an initialization
  * segment before the wanted media segment.
  */
-type IAVSBPendingTask = IPushTask |
-                        IRemoveOperation & { subject: Subject<void> } |
-                        IEndOfSegmentOperation & { subject: Subject<void> };
+type IAVSBPendingTask =
+  | IPushTask
+  | (IRemoveOperation & { subject: Subject<void> })
+  | (IEndOfSegmentOperation & { subject: Subject<void> });
 
 /** Structure of a `IAVSBPendingTask` item corresponding to a "Push" operation. */
 type IPushTask = IPushOperation<BufferSource> & {
@@ -83,15 +75,14 @@ type IPushTask = IPushOperation<BufferSource> & {
    * given chunk or both its initialization segment then the chunk (depending on
    * the last pushed initialization segment).
    */
-  data : BufferSource[];
+  data: BufferSource[];
   /**
    * The data that will be inserted to the inventory after that chunk is pushed.
    * If `null`, no data will be pushed.
    */
-  inventoryData : IInsertedChunkInfos |
-                  null;
+  inventoryData: IInsertedChunkInfos | null;
   /** Subject used to emit an event to the caller when the operation is finished. */
-  subject : Subject<void>;
+  subject: Subject<void>;
 };
 
 /**
@@ -104,28 +95,27 @@ type IPushTask = IPushOperation<BufferSource> & {
  *
  * @class AudioVideoSegmentBuffer
  */
-export default class AudioVideoSegmentBuffer
-                 extends SegmentBuffer<BufferSource> {
+export default class AudioVideoSegmentBuffer extends SegmentBuffer<BufferSource> {
   /** "Type" of the buffer concerned. */
-  public readonly bufferType : "audio" | "video";
+  public readonly bufferType: "audio" | "video";
 
   /** SourceBuffer implementation. */
-  private readonly _sourceBuffer : ICompatSourceBuffer;
+  private readonly _sourceBuffer: ICompatSourceBuffer;
 
   /**
    * Subject triggered when this AudioVideoSegmentBuffer is disposed.
    * Helps to clean-up Observables created at its creation.
    */
-  private _destroy$ : Subject<void>;
+  private _destroy$: Subject<void>;
 
   /**
    * Queue of awaited buffer "operations".
    * The first element in this array will be the first performed.
    */
-  private _queue : IAVSBQueueItem[];
+  private _queue: IAVSBQueueItem[];
 
   /** MediaSource on which the SourceBuffer object is attached. */
-  private readonly _mediaSource : MediaSource;
+  private readonly _mediaSource: MediaSource;
 
   /**
    * Information about the current operation processed by the
@@ -133,7 +123,7 @@ export default class AudioVideoSegmentBuffer
    * If equal to null, it means that no operation from the queue is currently
    * being processed.
    */
-  private _pendingTask : IAVSBPendingTask | null;
+  private _pendingTask: IAVSBPendingTask | null;
 
   /**
    * Keep track of the of the latest init segment pushed in the linked
@@ -145,11 +135,11 @@ export default class AudioVideoSegmentBuffer
    * `null` if no initialization segment have been pushed to the
    * `AudioVideoSegmentBuffer` yet.
    */
-  private _lastInitSegment : { /** The init segment itself. */
-                               data : Uint8Array;
-                               /** Hash of the initSegment for fast comparison */
-                               hash : number; } |
-                             null;
+  private _lastInitSegment: {
+    /** The init segment itself. */ data: Uint8Array;
+    /** Hash of the initSegment for fast comparison */
+    hash: number;
+  } | null;
 
   /**
    * @constructor
@@ -158,12 +148,19 @@ export default class AudioVideoSegmentBuffer
    * @param {SourceBuffer} sourceBuffer
    */
   constructor(
-    bufferType : "audio" | "video",
-    codec : string,
-    mediaSource : MediaSource
+    bufferType: "audio" | "video",
+    codec: string,
+    mediaSource: MediaSource
   ) {
     super();
-    const sourceBuffer = mediaSource.addSourceBuffer(codec);
+    let sourceBuffer: SourceBuffer;
+    if (bufferType === "video") {
+      sourceBuffer = mediaSource.addSourceBuffer(
+        'video/mp4; codecs="avc1.42E01E"'
+      );
+    } else {
+      sourceBuffer = mediaSource.addSourceBuffer(codec);
+    }
 
     this._destroy$ = new Subject<void>();
     this.bufferType = bufferType;
@@ -180,19 +177,25 @@ export default class AudioVideoSegmentBuffer
     // stay locked in a waiting state.
     // This interval is here to check at regular intervals if the underlying
     // SourceBuffer is currently updating.
-    interval(SOURCE_BUFFER_FLUSHING_INTERVAL).pipe(
-      tap(() => this._flush()),
-      takeUntil(this._destroy$)
-    ).subscribe();
+    interval(SOURCE_BUFFER_FLUSHING_INTERVAL)
+      .pipe(
+        tap(() => this._flush()),
+        takeUntil(this._destroy$)
+      )
+      .subscribe();
 
-    fromEvent(this._sourceBuffer, "error").pipe(
-      tap((err) => this._onPendingTaskError(err)),
-      takeUntil(this._destroy$)
-    ).subscribe();
-    fromEvent(this._sourceBuffer, "updateend").pipe(
-      tap(() => this._flush()),
-      takeUntil(this._destroy$)
-    ).subscribe();
+    fromEvent(this._sourceBuffer, "error")
+      .pipe(
+        tap((err) => this._onPendingTaskError(err)),
+        takeUntil(this._destroy$)
+      )
+      .subscribe();
+    fromEvent(this._sourceBuffer, "updateend")
+      .pipe(
+        tap(() => this._flush()),
+        takeUntil(this._destroy$)
+      )
+      .subscribe();
   }
 
   /**
@@ -221,12 +224,16 @@ export default class AudioVideoSegmentBuffer
    * @param {Object} infos
    * @returns {Observable}
    */
-  public pushChunk(infos : IPushChunkInfos<BufferSource>) : Observable<void> {
-    log.debug("AVSB: receiving order to push data to the SourceBuffer",
-              this.bufferType,
-              infos);
-    return this._addToQueue({ type: SegmentBufferOperation.Push,
-                              value: infos });
+  public pushChunk(infos: IPushChunkInfos<BufferSource>): Observable<void> {
+    log.debug(
+      "AVSB: receiving order to push data to the SourceBuffer",
+      this.bufferType,
+      infos
+    );
+    return this._addToQueue({
+      type: SegmentBufferOperation.Push,
+      value: infos,
+    });
   }
 
   /**
@@ -235,13 +242,17 @@ export default class AudioVideoSegmentBuffer
    * @param {number} end - end position, in seconds
    * @returns {Observable}
    */
-  public removeBuffer(start : number, end : number) : Observable<void> {
-    log.debug("AVSB: receiving order to remove data from the SourceBuffer",
-              this.bufferType,
-              start,
-              end);
-    return this._addToQueue({ type: SegmentBufferOperation.Remove,
-                              value: { start, end } });
+  public removeBuffer(start: number, end: number): Observable<void> {
+    log.debug(
+      "AVSB: receiving order to remove data from the SourceBuffer",
+      this.bufferType,
+      start,
+      end
+    );
+    return this._addToQueue({
+      type: SegmentBufferOperation.Remove,
+      value: { start, end },
+    });
   }
 
   /**
@@ -253,19 +264,23 @@ export default class AudioVideoSegmentBuffer
    * @param {Object} infos
    * @returns {Observable}
    */
-  public endOfSegment(infos : IEndOfSegmentInfos) : Observable<void> {
-    log.debug("AVSB: receiving order for validating end of segment",
-              this.bufferType,
-              infos.segment);
-    return this._addToQueue({ type: SegmentBufferOperation.EndOfSegment,
-                              value: infos });
+  public endOfSegment(infos: IEndOfSegmentInfos): Observable<void> {
+    log.debug(
+      "AVSB: receiving order for validating end of segment",
+      this.bufferType,
+      infos.segment
+    );
+    return this._addToQueue({
+      type: SegmentBufferOperation.EndOfSegment,
+      value: infos,
+    });
   }
 
   /**
    * Returns the currently buffered data, in a TimeRanges object.
    * @returns {TimeRanges}
    */
-  public getBufferedRanges() : TimeRanges {
+  public getBufferedRanges(): TimeRanges {
     return this._sourceBuffer.buffered;
   }
 
@@ -275,23 +290,24 @@ export default class AudioVideoSegmentBuffer
    * being processed)
    * @returns {Array.<Object>}
    */
-  public getPendingOperations() : Array<ISBOperation<BufferSource>> {
-    const parseQueuedOperation =
-      (op : IAVSBQueueItem | IAVSBPendingTask) : ISBOperation<BufferSource> => {
-        // Had to be written that way for TypeScrypt
-        switch (op.type) {
-          case SegmentBufferOperation.Push:
-            return { type: op.type, value: op.value };
-          case SegmentBufferOperation.Remove:
-            return { type: op.type, value: op.value };
-          case SegmentBufferOperation.EndOfSegment:
-            return { type: op.type, value: op.value };
-        }
-      };
+  public getPendingOperations(): Array<ISBOperation<BufferSource>> {
+    const parseQueuedOperation = (
+      op: IAVSBQueueItem | IAVSBPendingTask
+    ): ISBOperation<BufferSource> => {
+      // Had to be written that way for TypeScrypt
+      switch (op.type) {
+        case SegmentBufferOperation.Push:
+          return { type: op.type, value: op.value };
+        case SegmentBufferOperation.Remove:
+          return { type: op.type, value: op.value };
+        case SegmentBufferOperation.EndOfSegment:
+          return { type: op.type, value: op.value };
+      }
+    };
     const queued = this._queue.map(parseQueuedOperation);
-    return this._pendingTask === null ?
-      queued :
-      [parseQueuedOperation(this._pendingTask)].concat(queued);
+    return this._pendingTask === null
+      ? queued
+      : [parseQueuedOperation(this._pendingTask)].concat(queued);
   }
 
   /**
@@ -301,7 +317,7 @@ export default class AudioVideoSegmentBuffer
    * function.
    * @private
    */
-  public dispose() : void {
+  public dispose(): void {
     this._destroy$.next();
     this._destroy$.complete();
 
@@ -330,13 +346,16 @@ export default class AudioVideoSegmentBuffer
    * Called when an error arised that made the current task fail.
    * @param {Event} error
    */
-  private _onPendingTaskError(err : unknown) : void {
+  private _onPendingTaskError(err: unknown): void {
     this._lastInitSegment = null; // initialize init segment as a security
     if (this._pendingTask !== null) {
-      const error = err instanceof Error ?
-                      err :
-                      new Error("An unknown error occured when doing operations " +
-                                "on the SourceBuffer");
+      const error =
+        err instanceof Error
+          ? err
+          : new Error(
+              "An unknown error occured when doing operations " +
+                "on the SourceBuffer"
+            );
       this._pendingTask.subject.error(error);
     }
   }
@@ -351,10 +370,10 @@ export default class AudioVideoSegmentBuffer
    * @param {Object} operation
    * @returns {Observable}
    */
-  private _addToQueue(operation : ISBOperation<BufferSource>) : Observable<void> {
-    return new Observable((obs : Observer<void>) => {
-      const shouldRestartQueue = this._queue.length === 0 &&
-                                 this._pendingTask === null;
+  private _addToQueue(operation: ISBOperation<BufferSource>): Observable<void> {
+    return new Observable((obs: Observer<void>) => {
+      const shouldRestartQueue =
+        this._queue.length === 0 && this._pendingTask === null;
       const subject = new Subject<void>();
       const queueItem = objectAssign({ subject }, operation);
       this._queue.push(queueItem);
@@ -383,7 +402,7 @@ export default class AudioVideoSegmentBuffer
    * Perform next task if one.
    * @private
    */
-  private _flush() : void {
+  private _flush(): void {
     if (this._sourceBuffer.updating) {
       return; // still processing `this._pendingTask`
     }
@@ -415,7 +434,8 @@ export default class AudioVideoSegmentBuffer
         this._flush(); // Go to next item in queue
         return;
       }
-    } else { // if this._pendingTask is null, go to next item in queue
+    } else {
+      // if this._pendingTask is null, go to next item in queue
       const nextItem = this._queue.shift();
       if (nextItem === undefined) {
         return; // we have nothing left to do
@@ -424,24 +444,29 @@ export default class AudioVideoSegmentBuffer
       } else {
         const itemValue = nextItem.value;
 
-        let dataToPush : BufferSource[];
+        let dataToPush: BufferSource[];
         try {
           dataToPush = this._preparePushOperation(itemValue.data);
         } catch (e) {
-          this._pendingTask = objectAssign({ data: [],
-                                             inventoryData: itemValue.inventoryInfos },
-                                           nextItem);
-          const error = e instanceof Error ?
-            e :
-            new Error("An unknown error occured when preparing a push operation");
+          this._pendingTask = objectAssign(
+            { data: [], inventoryData: itemValue.inventoryInfos },
+            nextItem
+          );
+          const error =
+            e instanceof Error
+              ? e
+              : new Error(
+                  "An unknown error occured when preparing a push operation"
+                );
           this._lastInitSegment = null; // initialize init segment as a security
           nextItem.subject.error(error);
           return;
         }
 
-        this._pendingTask = objectAssign({ data: dataToPush,
-                                           inventoryData: itemValue.inventoryInfos },
-                                         nextItem);
+        this._pendingTask = objectAssign(
+          { data: dataToPush, inventoryData: itemValue.inventoryInfos },
+          nextItem
+        );
       }
     }
 
@@ -449,7 +474,10 @@ export default class AudioVideoSegmentBuffer
       switch (this._pendingTask.type) {
         case SegmentBufferOperation.EndOfSegment:
           // nothing to do, we will just acknowledge the segment.
-          log.debug("AVSB: Acknowledging complete segment", this._pendingTask.value);
+          log.debug(
+            "AVSB: Acknowledging complete segment",
+            this._pendingTask.value
+          );
           this._flush();
           return;
 
@@ -464,10 +492,12 @@ export default class AudioVideoSegmentBuffer
 
         case SegmentBufferOperation.Remove:
           const { start, end } = this._pendingTask.value;
-          log.debug("AVSB: removing data from SourceBuffer",
-                    this.bufferType,
-                    start,
-                    end);
+          log.debug(
+            "AVSB: removing data from SourceBuffer",
+            this.bufferType,
+            start,
+            end
+          );
           this._sourceBuffer.remove(start, end);
           break;
 
@@ -491,20 +521,20 @@ export default class AudioVideoSegmentBuffer
    * @returns {Object}
    */
   private _preparePushOperation(
-    data : IPushedChunkData<BufferSource>
-  ) : BufferSource[] {
+    data: IPushedChunkData<BufferSource>
+  ): BufferSource[] {
     // Push operation with both an init segment and a regular segment might
     // need to be separated into two steps
     const dataToPush = [];
-    const { codec,
-            timestampOffset,
-            appendWindow } = data;
-    let hasUpdatedSourceBufferType : boolean = false;
+    const { codec, timestampOffset, appendWindow } = data;
+    let hasUpdatedSourceBufferType: boolean = false;
 
     if (codec !== this.codec) {
       log.debug("AVSB: updating codec", codec);
-      hasUpdatedSourceBufferType = tryToChangeSourceBufferType(this._sourceBuffer,
-                                                               codec);
+      hasUpdatedSourceBufferType = tryToChangeSourceBufferType(
+        this._sourceBuffer,
+        codec
+      );
       if (hasUpdatedSourceBufferType) {
         this.codec = codec;
       } else {
@@ -514,10 +544,12 @@ export default class AudioVideoSegmentBuffer
 
     if (this._sourceBuffer.timestampOffset !== timestampOffset) {
       const newTimestampOffset = timestampOffset;
-      log.debug("AVSB: updating timestampOffset",
-                this.bufferType,
-                this._sourceBuffer.timestampOffset,
-                newTimestampOffset);
+      log.debug(
+        "AVSB: updating timestampOffset",
+        this.bufferType,
+        this._sourceBuffer.timestampOffset,
+        newTimestampOffset
+      );
       this._sourceBuffer.timestampOffset = newTimestampOffset;
     }
 
@@ -540,15 +572,15 @@ export default class AudioVideoSegmentBuffer
       this._sourceBuffer.appendWindowEnd = appendWindow[1];
     }
 
-    if (data.initSegment !== null &&
-        (hasUpdatedSourceBufferType || !this._isLastInitSegment(data.initSegment)))
-    {
+    if (
+      data.initSegment !== null &&
+      (hasUpdatedSourceBufferType || !this._isLastInitSegment(data.initSegment))
+    ) {
       // Push initialization segment before the media segment
       const segmentData = data.initSegment;
       dataToPush.push(segmentData);
       const initU8 = toUint8Array(segmentData);
-      this._lastInitSegment = { data: initU8,
-                                hash: hashBuffer(initU8) };
+      this._lastInitSegment = { data: initU8, hash: hashBuffer(initU8) };
     }
 
     if (data.chunk !== null) {
@@ -558,13 +590,13 @@ export default class AudioVideoSegmentBuffer
     return dataToPush;
   }
 
- /**
-  * Return `true` if the given `segmentData` is the same segment than the last
-  * initialization segment pushed to the `AudioVideoSegmentBuffer`.
-  * @param {BufferSource} segmentData
-  * @returns {boolean}
-  */
-  private _isLastInitSegment(segmentData : BufferSource) : boolean {
+  /**
+   * Return `true` if the given `segmentData` is the same segment than the last
+   * initialization segment pushed to the `AudioVideoSegmentBuffer`.
+   * @param {BufferSource} segmentData
+   * @returns {boolean}
+   */
+  private _isLastInitSegment(segmentData: BufferSource): boolean {
     if (this._lastInitSegment === null) {
       return false;
     }
@@ -574,9 +606,10 @@ export default class AudioVideoSegmentBuffer
     const oldInit = this._lastInitSegment.data;
     if (oldInit.byteLength === segmentData.byteLength) {
       const newInitU8 = toUint8Array(segmentData);
-      if (hashBuffer(newInitU8) === this._lastInitSegment.hash &&
-          areArraysOfNumbersEqual(oldInit, newInitU8))
-      {
+      if (
+        hashBuffer(newInitU8) === this._lastInitSegment.hash &&
+        areArraysOfNumbersEqual(oldInit, newInitU8)
+      ) {
         return true;
       }
     }
