@@ -105,11 +105,12 @@ var Adaptation = /** @class */ (function () {
         this.isSupported = isSupported;
         // for manuallyAdded adaptations (not in the manifest)
         this.manuallyAdded = isManuallyAdded === true;
-        if (this.representations.length > 0 && !isSupported) {
-            log.warn("Incompatible codecs for adaptation", parsedAdaptation);
-            var error = new MediaError("MANIFEST_INCOMPATIBLE_CODECS_ERROR", "An Adaptation contains only incompatible codecs.");
-            this.parsingErrors.push(error);
-        }
+        // if (this.representations.length > 0 && !isSupported) {
+        //   log.warn("Incompatible codecs for adaptation", parsedAdaptation);
+        //   const error = new MediaError("MANIFEST_INCOMPATIBLE_CODECS_ERROR",
+        //                                "An Adaptation contains only incompatible codecs.");
+        //   this.parsingErrors.push(error);
+        // }
     }
     /**
      * Returns unique bitrate for every Representation in this Adaptation.
