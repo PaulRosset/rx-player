@@ -3,7 +3,7 @@
 /.scannerwork
 /localhost.crt
 /localhost.key
-/node_modules
+# /node_modules
 /test-output.xml
 
 /demo/full/bundle.js
@@ -16,13 +16,13 @@
 /tests/integration/coverage
 /coverage
 
-/dist/*.d.ts
-/dist/_esm5.processed
-/dist/_esm5.raw
+# /dist/*.d.ts
+# /dist/_esm5.processed
+# /dist/_esm5.raw
 
-/features
-/logger
-/minimal
-/experimental
-/types
-/tools
+# /features
+# /logger
+# /minimal
+# /experimental
+# /types
+# /tools
