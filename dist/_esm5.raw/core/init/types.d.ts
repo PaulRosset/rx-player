@@ -25,8 +25,6 @@ import { IStreamEventEvent, IStreamEventSkipEvent } from "./stream_events_emitte
 export interface IInitClockTick {
     position: number;
     getCurrentTime: () => number;
-    setCurrentTime: (time: number) => void;
-    mediaInternalSeeking: boolean;
     buffered: TimeRanges;
     duration: number;
     bufferGap: number;

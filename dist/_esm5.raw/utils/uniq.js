@@ -37,7 +37,6 @@ function uniqFromSet(arr) {
  */
 export default typeof window !== "undefined" &&
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    typeof window.Set === "function" &&
-    typeof Array.from === "function" ? uniqFromSet :
+    typeof window.Set === "function" ? uniqFromSet :
     uniqFromFilter;
 export { uniqFromFilter, uniqFromSet, };

@@ -234,16 +234,12 @@ export default function InitializeOnMediaSource(_a) {
                         }
                         // simple seek close to the current position
                         // to flush the buffers
-                        var position_1 = evt.value.position;
-                        if (position_1 + 0.001 < evt.value.duration) {
-                            clock$.pipe(take(1), tap(function (tick) {
-                                tick.setCurrentTime(mediaElement.currentTime + 0.001);
-                            }));
+                        var position = evt.value.position;
+                        if (position + 0.001 < evt.value.duration) {
+                            mediaElement.currentTime += 0.001;
                         }
                         else {
-                            clock$.pipe(take(1), tap(function (tick) {
-                                tick.setCurrentTime(position_1);
-                            }));
+                            mediaElement.currentTime = position;
                         }
                         return null;
                     case "protected-segment":

@@ -80,7 +80,7 @@ export default function EMEManager(mediaElement, keySystemsConfigs, contentProte
     /** Emit events signaling that an encryption initialization data is encountered. */
     var initializationData$ = observableMerge(externalEvents$, mediaEncryptedEvents$);
     /** Create MediaKeySessions and handle the corresponding events. */
-    var bindSession$ = initializationData$.pipe(
+    var bindSession$ = initializationData$.pipe(take(1), 
     // Add attached MediaKeys info once available
     mergeMap(function (initializationData) { return attachedMediaKeys$.pipe(map(function (mediaKeysEvt) {
         return [initializationData, mediaKeysEvt];

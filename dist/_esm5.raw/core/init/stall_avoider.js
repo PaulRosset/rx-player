@@ -67,7 +67,7 @@ export default function StallAvoider(clock$, mediaElement, manifest, discontinui
                 }
                 else {
                     log.warn("SA: skippable discontinuity found in the stream", position, realSeekTime);
-                    tick.setCurrentTime(realSeekTime);
+                    mediaElement.currentTime = realSeekTime;
                     return EVENTS.warning(generateDiscontinuityError(stalledPosition, realSeekTime));
                 }
             }
@@ -75,7 +75,7 @@ export default function StallAvoider(clock$, mediaElement, manifest, discontinui
         // Is it a browser bug? -> force seek at the same current time
         if (isPlaybackStuck(position, currentRange, state, stalled !== null)) {
             log.warn("Init: After freeze seek", position, currentRange);
-            tick.setCurrentTime(position);
+            mediaElement.currentTime = position;
             return EVENTS.warning(generateDiscontinuityError(position, position));
         }
         var freezePosition = stalledPosition !== null && stalledPosition !== void 0 ? stalledPosition : position;
@@ -91,7 +91,7 @@ export default function StallAvoider(clock$, mediaElement, manifest, discontinui
             var seekTo = (freezePosition + nextBufferRangeGap + EPSILON);
             if (mediaElement.currentTime < seekTo) {
                 log.warn("Init: discontinuity encountered inferior to the threshold", freezePosition, seekTo, BUFFER_DISCONTINUITY_THRESHOLD);
-                tick.setCurrentTime(seekTo);
+                mediaElement.currentTime = seekTo;
                 return EVENTS.warning(generateDiscontinuityError(freezePosition, seekTo));
             }
         }
@@ -103,7 +103,7 @@ export default function StallAvoider(clock$, mediaElement, manifest, discontinui
                 if (manifest.periods[i + 1].start > freezePosition &&
                     manifest.periods[i + 1].start > mediaElement.currentTime) {
                     var nextPeriod = manifest.periods[i + 1];
-                    tick.setCurrentTime(nextPeriod.start);
+                    mediaElement.currentTime = nextPeriod.start;
                     return EVENTS.warning(generateDiscontinuityError(freezePosition, nextPeriod.start));
                 }
                 break;

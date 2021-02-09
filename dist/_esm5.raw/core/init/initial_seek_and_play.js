@@ -80,10 +80,10 @@ function autoPlay$(mediaElement) {
  */
 export default function seekAndLoadOnMediaEvents(_a) {
     var clock$ = _a.clock$, mediaElement = _a.mediaElement, startTime = _a.startTime, mustAutoPlay = _a.mustAutoPlay, isDirectfile = _a.isDirectfile;
-    var seek$ = whenLoadedMetadata$(mediaElement).pipe(take(1), mergeMap(function () {
-        return clock$.pipe(take(1), tap(function (clockTick) {
-            clockTick.setCurrentTime(typeof startTime === "function" ? startTime() : startTime);
-        }));
+    var seek$ = whenLoadedMetadata$(mediaElement).pipe(take(1), tap(function () {
+        log.info("Init: Set initial time", startTime);
+        mediaElement.currentTime = typeof startTime === "function" ? startTime() :
+            startTime;
     }), shareReplay({ refCount: true }));
     var load$ = seek$.pipe(mergeMap(function () {
         return canPlay(clock$, mediaElement, isDirectfile).pipe(tap(function () { return log.info("Init: Can begin to play content"); }), mergeMap(function (evt) {

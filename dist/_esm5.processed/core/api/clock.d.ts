@@ -77,8 +77,6 @@ export interface IClockTick extends IMediaInfos {
     /** Set if the player is stalled, `null` if not. */
     stalled: IStalledStatus | null;
     getCurrentTime: () => number;
-    setCurrentTime: (time: number) => void;
-    mediaInternalSeeking: boolean;
 }
 export interface IClockOptions {
     withMediaSource: boolean;

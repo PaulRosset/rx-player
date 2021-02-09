@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 import log from "../../../log";
-import sliceUint8Array from "../../../utils/slice_uint8array";
 import { bytesToHex } from "../../../utils/string_parsing";
 import { getBoxContent, getBoxOffsets, } from "./get_box";
 /**
@@ -45,7 +44,7 @@ export default function takePSSHOut(data) {
         if (psshOffsets == null) {
             return psshBoxes;
         }
-        var pssh = sliceUint8Array(moov, psshOffsets[0], psshOffsets[2]);
+        var pssh = moov.slice(psshOffsets[0], psshOffsets[2]);
         var systemID = getSystemID(pssh, psshOffsets[1] - psshOffsets[0]);
         if (systemID !== null) {
             psshBoxes.push({ systemID: systemID, data: pssh });
@@ -76,6 +75,6 @@ function getSystemID(buff, initialDataOffset) {
     if (offset + 16 > buff.length) {
         return null;
     }
-    var systemIDBytes = sliceUint8Array(buff, offset + 16);
+    var systemIDBytes = buff.slice(offset, offset + 16);
     return bytesToHex(systemIDBytes);
 }

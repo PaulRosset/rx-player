@@ -222,23 +222,11 @@ function getStalledStatus(prevTimings, currentTimings, _a) {
  */
 function createClock(mediaElement, options) {
     return observableDefer(function () {
-        var mediaInternalSeeking = false;
-        var lastTimings = objectAssign(getMediaInfos(mediaElement, "init"), { stalled: null, mediaInternalSeeking: mediaInternalSeeking,
-            getCurrentTime: function () { return mediaElement.currentTime; },
-            setCurrentTime: function (time) { return mediaElement.currentTime = time; } });
+        var lastTimings = objectAssign(getMediaInfos(mediaElement, "init"), { stalled: null, getCurrentTime: function () { return mediaElement.currentTime; } });
         function getCurrentClockTick(state) {
             var mediaTimings = getMediaInfos(mediaElement, state);
             var stalledState = getStalledStatus(lastTimings, mediaTimings, options);
-            if (mediaInternalSeeking && stalledState === null) {
-                mediaInternalSeeking = false;
-            }
-            var timings = objectAssign({}, { stalled: stalledState, mediaInternalSeeking: mediaInternalSeeking,
-                getCurrentTime: function () { return mediaElement.currentTime; },
-                setCurrentTime: function (time) {
-                    mediaInternalSeeking = true;
-                    mediaElement.currentTime = time;
-                },
-            }, mediaTimings);
+            var timings = objectAssign({}, { stalled: stalledState, getCurrentTime: function () { return mediaElement.currentTime; } }, mediaTimings);
             log.debug("API: current media element state", timings);
             return timings;
         }
